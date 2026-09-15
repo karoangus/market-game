@@ -1,14 +1,14 @@
 // =============================================================
 //  sw.js — Service Worker برای PWA (آفلاین + نصب‌پذیری)
 //
-//  - پوستهٔ اپ (HTML/CSS/JS/آیکون‌ها): cache-first
-//  - منابع بیرونی (three.js از CDN، فونت): stale-while-revalidate
+//  - پوستهٔ اپ (HTML/CSS/JS/آیکون‌ها/موتور سه‌بعدی): cache-first
+//  - فونت وب (گوگل‌فونت): stale-while-revalidate
 //  - ناوبری (باز کردن صفحه): network-first با فallback به index.html
 //  برای آفلاین بودن
 //
 //  ➕ هنگام تغییر فایل‌های اپ، VERSION را تغییر بده تا کش‌ها تازه شوند.
 // =============================================================
-const VERSION = 'market-game-v1';
+const VERSION = 'market-game-v2';
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 
@@ -17,6 +17,8 @@ const APP_SHELL = [
   './index.html',
   './manifest.webmanifest',
   './css/style.css',
+  './vendor/three/build/three.module.js',
+  './vendor/three/examples/jsm/controls/OrbitControls.js',
   './js/util.js',
   './js/config.js',
   './js/economy.js',

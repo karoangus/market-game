@@ -90,6 +90,7 @@ function onResize() {
 
 // ---------- شروع بازی ----------
 function enterGame(msg) {
+  ui.hideStartScreen(); // صفحهٔ شروع کنار می‌رود تا بازی دیده شود
   ui.showHud();
   ui.setHud(state);
   refreshShelves(world, state.inventory);
