@@ -55,6 +55,11 @@ export function showHud() {
 export function hideHud() {
   $('hud').classList.add('hidden');
 }
+/** برداشتن صفحهٔ شروع — بدون این، صفحهٔ شروع روی بازی می‌ماند! */
+export function hideStartScreen() {
+  const el = $('start-screen');
+  if (el) el.classList.add('hidden');
+}
 
 export function setHud(state) {
   $('hud-day').textContent = `📅 روز ${fa(state.day)}`;
@@ -72,9 +77,11 @@ export function bumpMoney(rev) {
 
 export function setRunning(on) {
   for (const id of ['btn-supplier', 'btn-pricing']) $(id).classList.toggle('locked', on);
-  $('btn-start-day').classList.toggle('locked', on);
-  $('btn-start-day .b-emoji').textContent = on ? '🚶' : '▶️';
-  $('btn-start-day span:last-child').textContent = on ? 'فروش در حال انجام' : 'شروع روز';
+  const btn = $('btn-start-day');
+  btn.classList.toggle('locked', on);
+  // نکته: $ یعنی getElementById — برای زیرعنصرها باید querySelector به کار رود
+  btn.querySelector('.b-emoji').textContent = on ? '🚶' : '▶️';
+  btn.querySelector('span:last-child').textContent = on ? 'فروش در حال انجام' : 'شروع روز';
   $('day-progress').classList.toggle('hidden', !on);
 }
 
@@ -226,7 +233,8 @@ export function initUI(hooks) {
       // به‌روزرسانی هزینهٔ هر ردیف
       cb.refreshSupplier && cb.refreshSupplier();
     } else if (b.dataset.sup === 'buy') {
-      const ok = cb.buy(id, qty[id] || 0);
+      // همان پیش‌فرضی که در ردیف نمایش داده می‌شود (۱) — وگرنه اولین خرید کاری نمی‌کند
+      const ok = cb.buy(id, qty[id] || 1);
       if (ok) {
         qty[id] = 1;
         cb.refreshSupplier && cb.refreshSupplier();
