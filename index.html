@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a141d" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="سوپرمارکت" />
+  <meta name="description" content="سوپرمارکت من — بازی سه‌بعدی مدیریت سوپرمارکت برای موبایل: خرید جنس، قیمت‌گذاری، مشتری‌ها و سود روزانه" />
+  <title>سوپرمارکت من | بازی مدیریت سوپرمارکت</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🛒</text></svg>" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./css/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="scene"></canvas>
+
+  <!-- ===== صفحهٔ شروع ===== -->
+  <div id="start-screen">
+    <div class="start-card">
+      <div class="start-emoji">🛒</div>
+      <h1>سوپرمارکت من</h1>
+      <p class="start-sub">بازی سه‌بعدی مدیریت سوپرمارکت ۲۰ متری</p>
+      <ul class="start-steps">
+        <li>📊 هر روز قیمت بازار به‌صورت تصادفی تغییر می‌کند</li>
+        <li>🛒 از تأمین‌کننده جنس بخر و روی قفسه‌ها چیده شود</li>
+        <li>🏷️ قیمت فروش را خودت تعیین کن — نه‌بالا، نه‌پایین!</li>
+        <li>🚶 مشتری‌ها وارد می‌شوند، خرید می‌کنند، می‌روند</li>
+        <li>💰 پایان روز: سود و زیان را ببین و ادامه بده</li>
+      </ul>
+      <button id="btn-new-game" class="cta">شروع بازی — ۱۰۰ دلار 🚀</button>
+      <button id="btn-continue" class="cta ghost hidden">ادامهٔ بازی</button>
+      <button id="btn-restart" class="mini hidden">شروع از نو (پاک کردن پیشرفت)</button>
+    </div>
+    <p class="start-hint">📱 یک انگشت: چرخش دوربین · دو انگشت: زوم</p>
+  </div>
+
+  <!-- ===== HUD ===== -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="hud-pill" id="hud-day">روز ۱</div>
+      <div class="hud-pill hud-money" id="hud-money"><span id="money-val">۰ $</span></div>
+      <button id="btn-reset-view" class="icon-btn" title="بازنشانی دوربین">🎥</button>
+    </div>
+
+    <div id="toast-wrap"></div>
+
+    <div id="day-progress" class="hidden">
+      <div id="progress-label" class="progress-label"></div>
+      <div class="progress-track"><div id="progress-fill"></div></div>
+    </div>
+
+    <div class="hud-bottom">
+      <button class="bottom-btn" id="btn-supplier"><span class="b-emoji">🛒</span><span>تأمین‌کننده</span></button>
+      <button class="bottom-btn" id="btn-pricing"><span class="b-emoji">🏷️</span><span>قیمت‌گذاری</span></button>
+      <button class="bottom-btn primary" id="btn-start-day"><span class="b-emoji">▶️</span><span>شروع روز</span></button>
+    </div>
+  </div>
+
+  <!-- ===== بک‌دراپ + پنل‌ها ===== -->
+  <div id="sheet-backdrop"></div>
+
+  <section class="sheet" id="sheet-supplier">
+    <header class="sheet-head">
+      <div>
+        <div class="sheet-title">🛒 تأمین‌کننده</div>
+        <div class="sheet-sub">قیمت‌های بازار امروز — جنس برای قفسه‌ها بخر</div>
+      </div>
+      <div class="sheet-balance" id="supplier-balance"></div>
+      <button class="sheet-close">✕</button>
+    </header>
+    <div class="sheet-body" id="supplier-rows"></div>
+  </section>
+
+  <section class="sheet" id="sheet-pricing">
+    <header class="sheet-head">
+      <div>
+        <div class="sheet-title">🏷️ قیمت‌گذاری فروش</div>
+        <div class="sheet-sub">نزدیک به بازار = مشتری بیشتر · خیلی بالاتر = قفسهٔ خالی!</div>
+      </div>
+      <button class="sheet-close">✕</button>
+    </header>
+    <div class="sheet-body" id="pricing-rows"></div>
+  </section>
+
+  <section class="sheet" id="sheet-report">
+    <header class="sheet-head">
+      <div>
+        <div class="sheet-title" id="report-title">📊 گزارش روز</div>
+        <div class="sheet-sub">نتیجهٔ امروز سوپرمارکتت</div>
+      </div>
+    </header>
+    <div class="sheet-body" id="report-body"></div>
+  </section>
+
+  <!-- ===== جعبهٔ تأیید ===== -->
+  <div id="confirm-box" class="hidden">
+    <div class="confirm-card">
+      <p id="confirm-msg"></p>
+      <div class="confirm-btns">
+        <button id="confirm-yes" class="cta small">بله</button>
+        <button id="confirm-no" class="cta small ghost">نه</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
