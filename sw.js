@@ -8,7 +8,7 @@
 //
 //  ➕ هنگام تغییر فایل‌های اپ، VERSION را تغییر بده تا کش‌ها تازه شوند.
 // =============================================================
-const VERSION = 'market-game-v1';
+const VERSION = 'market-game-v2';
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 
