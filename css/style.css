@@ -591,3 +591,84 @@ button {
     transform: translate(-50%, 0);
   }
 }
+
+/* ---------- خطای راه‌اندازی (ماژول‌ها بارگذاری نشدند) ---------- */
+#boot-error {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: radial-gradient(120% 90% at 50% 0%, #3a1420 0%, #14101c 55%, #0a141d 100%);
+}
+.boot-card {
+  width: min(460px, 100%);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 22px;
+  padding: 26px 22px;
+  text-align: center;
+}
+.boot-emoji {
+  font-size: 46px;
+}
+.boot-card h2 {
+  font-size: 22px;
+  font-weight: 900;
+  margin: 8px 0 10px;
+}
+.boot-card p {
+  font-size: 14px;
+  line-height: 2;
+  color: #dbe6f0;
+  text-align: right;
+  word-break: break-word;
+}
+.boot-hint {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: #9fb0c0;
+  line-height: 1.9;
+}
+
+/* ---------- هشدار «گرافیک سه‌بعدی در دسترس نیست» ---------- */
+.engine-error {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(5, 10, 15, 0.72);
+}
+.engine-error-card {
+  width: min(420px, 100%);
+  background: #1c2733;
+  border: 1px solid rgba(240, 180, 80, 0.45);
+  border-radius: 20px;
+  padding: 22px 18px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.engine-error-card b {
+  font-size: 16px;
+  color: #ffcf87;
+}
+.engine-error-card p {
+  font-size: 13.5px;
+  line-height: 2;
+  text-align: right;
+  color: #e7eef5;
+  word-break: break-word;
+}
+.engine-error-card small {
+  font-size: 12px;
+  line-height: 1.9;
+  color: #9fb0c0;
+  text-align: right;
+}

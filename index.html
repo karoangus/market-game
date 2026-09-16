@@ -120,6 +120,94 @@
     </div>
   </div>
 
+  <!-- ===== خطای راه‌اندازی =====
+       اگر ماژول‌های بازی اصلاً بارگذاری نشوند (بازکردن فایل با file://،
+       مسدودشدن three.js توسط افزونه، اینترنت قطع و…) قبلاً صفحه بی‌سروصدا
+       مرده می‌ماند و دکمهٔ «شروع بازی» هیچ کاری نمی‌کرد. این اسکریپت
+       «کلاسیک» (غیرماژول) است، پس حتی وقتی ماژول‌ها بارگذاری نمی‌شوند هم
+       اجرا می‌شود و علت را به بازیکن نشان می‌دهد. -->
+  <div id="boot-error" class="hidden">
+    <div class="boot-card">
+      <div class="boot-emoji">⚠️</div>
+      <h2 id="boot-title">بازی بالا نیامد</h2>
+      <p id="boot-msg"></p>
+      <button class="cta" id="boot-reload">🔄 تلاش دوباره</button>
+      <p class="boot-hint" id="boot-hint"></p>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      var boot = document.getElementById('boot-error');
+      var shown = false;
+      function fail(title, msg, hint) {
+        if (shown) return;
+        shown = true;
+        document.getElementById('boot-title').textContent = title;
+        document.getElementById('boot-msg').textContent = msg;
+        document.getElementById('boot-hint').textContent = hint || '';
+        boot.classList.remove('hidden');
+      }
+      document.getElementById('boot-reload').addEventListener('click', function () {
+        if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (rs) {
+              return Promise.all(rs.map(function (r) { return r.update(); }));
+            })
+            .then(function () { location.reload(); });
+        } else {
+          location.reload();
+        }
+      });
+
+      // ۱) بازکردن مستقیم فایل — ماژول‌های ES در file:// کار نمی‌کنند
+      if (location.protocol === 'file:') {
+        fail(
+          'بازی را با file:// باز کرده‌ای',
+          'مرورگرها اجازه نمی‌دهند فایل‌های ماژول JavaScript از روی هارد دیسک بارگذاری شوند، ' +
+            'برای همین صفحهٔ شروع می‌آید ولی دکمهٔ «شروع بازی» کار نمی‌کند.',
+          'بازی را از آدرس آنلاین باز کن: https://karoangus.github.io/market-game/ — ' +
+            'یا در پوشهٔ بازی یک سرور محلی اجرا کن: python3 -m http.server 8000 و بعد http://localhost:8000'
+        );
+        return;
+      }
+
+      // ۲) خطاها را فقط یادداشت می‌کنیم؛ نمایش پیام خطا کار watchdog است.
+      //    (وگرنه مثلاً یک فونت گوگلِ بارگذاری‌نشده، بازیِ سالم را «خراب» نشان می‌داد)
+      var lastError = '';
+      function note(src) {
+        if (typeof src === 'string' && (src.indexOf('fonts.g') !== -1 || src.indexOf('gstatic') !== -1)) return;
+        lastError = String(src || 'خطای ناشناخته');
+      }
+      window.addEventListener(
+        'error',
+        function (e) {
+          if (window.__MG_READY__) return;
+          note(e && e.message ? e.message : e && e.target && (e.target.src || e.target.href));
+        },
+        true
+      );
+      window.addEventListener('unhandledrejection', function (e) {
+        if (window.__MG_READY__) return;
+        note((e.reason && e.reason.message) || e.reason);
+      });
+
+      // ۳) watchdog: اگر بعد از ۶ ثانیه بازی ready نشده بود، ساکت نمان
+      setTimeout(function () {
+        if (window.__MG_READY__) return;
+        fail(
+          'بازی بالا نیامد',
+          (lastError ? lastError + ' — ' : '') +
+            'فایل‌های بازی بارگذاری نشدند. معمولاً یا اتصال اینترنت قطع است، یا یک افزونهٔ مرورگر ' +
+            '(ad-blocker / حریم‌خصوصی) three.js را مسدود کرده، یا نسخهٔ قدیمی این صفحه در کش مانده است.',
+          'راه‌حل: یک بار با Ctrl+Shift+R (در موبایل: پاک‌کردن دادهٔ سایت) بارگذاری کن. ' +
+            'نسخهٔ آنلاین: https://karoangus.github.io/market-game/'
+        );
+      }, 6000);
+    })();
+  </script>
+
   <script type="module" src="./js/main.js"></script>
 </body>
 </html>

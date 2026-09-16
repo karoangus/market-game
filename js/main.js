@@ -1,19 +1,39 @@
 // =============================================================
 //  main.js — نقطهٔ ورود: صحنهٔ سه‌بعدی، حلقهٔ بازی و اتصال
 //  همهٔ سیستم‌ها به هم (روزها، خرید، قیمت‌گذاری، مشتری‌ها)
+//
+//  ⚠️ ترتیب راه‌اندازی عمداً این‌گونه است:
+//    ۱) اول دکمه‌ها وصل می‌شوند (ui.initUI) — یعنی دکمهٔ
+//       «شروع بازی» همیشه زنده است.
+//    ۲) بعد موتور سه‌بعدی ساخته می‌شود و داخل try است؛ اگر
+//       WebGL در دسترس نبود، بازی در «حالت بدون گرافیک» ادامه
+//       می‌یابد و پیام خطا نمایش داده می‌شود — نه یک دکمهٔ مرده
+//       و بی‌سروصدا.
 // =============================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PRODUCTS, GAME } from './config.js';
 import { rollMarketPrices } from './economy.js';
 import { newGameState, saveGame, loadGame, hasSave, clearSave, freshDayStats } from './state.js';
-import { createWorld, buildLights, refreshShelves, refreshTags, floatText, REGISTER_POS } from './scene3d.js';
+import {
+  createWorld,
+  createHeadlessWorld,
+  buildLights,
+  refreshShelves,
+  refreshTags,
+  floatText,
+  REGISTER_POS,
+} from './scene3d.js';
 import { DaySimulation } from './customers.js';
 import * as ui from './ui.js';
 import { sfx } from './sound.js';
 import { fa, money } from './util.js';
 
-let renderer, scene, camera, controls, world;
+let renderer = null;
+let scene = null;
+let camera = null;
+let controls = null;
+let world = null;
 let state = null;
 let phase = 'menu'; // menu | prep | running | report
 let sim = null;
@@ -24,34 +44,7 @@ const HOME_TARGET = new THREE.Vector3(0, 0.85, 0);
 init();
 
 function init() {
-  const canvas = document.getElementById('scene');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0xbfe0f2);
-  scene.fog = new THREE.Fog(0xcfe8f7, 26, 48);
-
-  camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.copy(HOME_CAM);
-
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.target.copy(HOME_TARGET);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.08;
-  controls.enablePan = false;
-  controls.minDistance = 3.5;
-  controls.maxDistance = 15;
-  controls.minPolarAngle = 0.12;
-  controls.maxPolarAngle = 1.52;
-
-  buildLights(scene);
-  world = createWorld(scene);
-
+  // ۱) اول رابط کاربری — حتی اگر موتور سه‌بعدی بمیرد، دکمه‌ها کار می‌کنند
   ui.initUI({
     startNew,
     continueGame,
@@ -64,11 +57,68 @@ function init() {
     refreshSupplier: () => state && ui.refreshSupplier(state),
     refreshPricing: () => state && ui.refreshPricing(state),
   });
-
-  window.addEventListener('resize', onResize);
   ui.showContinue(hasSave());
+  window.addEventListener('resize', onResize);
+
+  // ۲) موتور سه‌بعدی (اختیاری — خطایش بازی را متوقف نمی‌کند)
+  initEngine();
+
   registerServiceWorker();
   animate();
+
+  // نشانهٔ «بازی بالا آمد» برای watchdog در index.html
+  window.__MG_READY__ = true;
+}
+
+/**
+ * ساخت رندرر/صحنهٔ سه‌بعدی. اگر WebGL موجود نباشد (مرورگر قدیمی،
+ * غیرفعال‌شده، یا مسدودشده توسط افزونه) یک دنیای بدون‌گرافیک
+ * ساخته می‌شود تا منطق بازی (خرید، قیمت‌گذاری، مشتری، گزارش)
+ * همچنان کامل کار کند.
+ */
+function initEngine() {
+  try {
+    const canvas = document.getElementById('scene');
+    if (!canvas) throw new Error('canvas #scene پیدا نشد');
+
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xbfe0f2);
+    scene.fog = new THREE.Fog(0xcfe8f7, 26, 48);
+
+    camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.copy(HOME_CAM);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.copy(HOME_TARGET);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.enablePan = false;
+    controls.minDistance = 3.5;
+    controls.maxDistance = 15;
+    controls.minPolarAngle = 0.12;
+    controls.maxPolarAngle = 1.52;
+
+    buildLights(scene);
+    world = createWorld(scene);
+    return true;
+  } catch (err) {
+    // هر خطایی اینجا افتاد: رندر را خاموش کن ولی بازی را نگه دار
+    renderer = null;
+    scene = null;
+    camera = null;
+    controls = null;
+    world = createHeadlessWorld();
+    console.warn('[market-game] موتور سه‌بعدی بالا نیامد — حالت بدون گرافیک فعال شد:', err);
+    ui.showEngineError(err);
+    return false;
+  }
 }
 
 // ---------- PWA: ثبت Service Worker (آفلاین + نصب‌پذیری) ----------
@@ -83,6 +133,7 @@ function registerServiceWorker() {
 }
 
 function onResize() {
+  if (!renderer || !camera) return; // حالت بدون گرافیک
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -170,7 +221,7 @@ function startDay() {
         sfx.coin();
         ui.setHud(state);
         ui.bumpMoney(rev);
-        floatText(world, `+${money(rev)}`, REGISTER_POS);
+        if (renderer) floatText(world, `+${money(rev)}`, REGISTER_POS);
       },
       onDayEnd: () => endDay(),
     });
@@ -233,8 +284,10 @@ function closeSheets() {
 }
 
 function resetView() {
-  camera.position.copy(HOME_CAM);
-  controls.target.copy(HOME_TARGET);
+  if (camera && controls) {
+    camera.position.copy(HOME_CAM);
+    controls.target.copy(HOME_TARGET);
+  }
   sfx.click();
 }
 
@@ -242,11 +295,12 @@ function resetView() {
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(0.05, clock.getDelta());
-  controls.update();
-  world.update(dt);
+  if (controls) controls.update();
+  if (world) world.update(dt);
   if (sim) {
     sim.update(dt);
+    // ممکن است sim.update روز را تمام کرده و sim را null کرده باشد
     if (sim) ui.setProgress(sim.spawned, sim.total);
   }
-  renderer.render(scene, camera);
+  if (renderer && scene && camera) renderer.render(scene, camera);
 }
