@@ -192,6 +192,36 @@ export function confirmBox(msg, onYes) {
   $('confirm-box').classList.remove('hidden');
 }
 
+// ---------- خطای موتور سه‌بعدی ----------
+/**
+ * اگر WebGL بالا نیاید، یک نوار هشدار نشان می‌دهد. بازی در حالت
+ * بدون‌گرافیک ادامه پیدا می‌کند، پس این فقط اطلاع‌رسانی است.
+ */
+export function showEngineError(err) {
+  if ($('engine-error')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'engine-error';
+  wrap.className = 'engine-error';
+  const title = document.createElement('b');
+  title.textContent = '⚠️ گرافیک سه‌بعدی در دسترس نیست';
+  const msg = document.createElement('p');
+  msg.textContent =
+    'مرورگرت WebGL را اجرا نکرد، پس فروشگاه رسم نمی‌شود — ولی بازی کامل کار می‌کند ' +
+    '(خرید، قیمت‌گذاری، مشتری‌ها و گزارش). خطا: ' + (err && err.message ? err.message : err);
+  const hint = document.createElement('small');
+  hint.textContent =
+    'راه‌حل: WebGL را در تنظیمات مرورگر فعال کن یا از آخرین نسخهٔ Chrome/Firefox/Safari استفاده کن.';
+  const close = document.createElement('button');
+  close.className = 'cta small ghost';
+  close.textContent = 'باشه، ادامه می‌دهم';
+  close.addEventListener('click', () => wrap.remove());
+  const card = document.createElement('div');
+  card.className = 'engine-error-card';
+  card.append(title, msg, hint, close);
+  wrap.appendChild(card);
+  document.body.appendChild(wrap);
+}
+
 // ---------- صفحهٔ شروع ----------
 export function showContinue(has) {
   $('btn-continue').classList.toggle('hidden', !has);

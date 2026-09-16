@@ -59,6 +59,7 @@ function floorTexture() {
   c.width = 512;
   c.height = 512;
   const x = c.getContext('2d');
+  if (!x) return null; // مرورگر بدون canvas → کف سادهٔ تک‌رنگ
   x.fillStyle = '#e9e3d3';
   x.fillRect(0, 0, 512, 512);
   x.strokeStyle = '#d2c9b3';
@@ -201,6 +202,7 @@ function makeTag(product) {
   group.add(meshTag);
   function draw(price) {
     const x = c.getContext('2d');
+    if (!x) return;
     x.clearRect(0, 0, 256, 96);
     x.fillStyle = '#ffffff';
     roundRectPath(x, 6, 6, 244, 84, 16);
@@ -227,9 +229,12 @@ function makeTag(product) {
 function buildRoom(world) {
   const s = world.scene;
   const { w, d, h, doorW } = ROOM;
+  const tiles = floorTexture();
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(w, d),
-    new THREE.MeshStandardMaterial({ map: floorTexture(), roughness: 0.95 })
+    new THREE.MeshStandardMaterial(
+      tiles ? { map: tiles, roughness: 0.95 } : { color: 0xe9e3d3, roughness: 0.95 }
+    )
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
@@ -286,9 +291,7 @@ function buildShelves(world) {
     const tag = makeTag(p);
     tag.group.position.set(0, 1.42, 0.24);
     g.add(tag.group);
-    const shopSpot = new THREE.Vector3(slot.x, 0, slot.z).add(
-      new THREE.Vector3(0, 0, 0.42).applyAxisAngle(new THREE.Vector3(0, 1, 0), slot.rot)
-    );
+    const shopSpot = slotShopSpot(i);
     world.shelves[p.id] = { group: g, items, tag, shopSpot, product: p };
   });
 }
@@ -350,6 +353,7 @@ function buildSign(world) {
   tex.colorSpace = THREE.SRGBColorSpace;
   const draw = () => {
     const x = c.getContext('2d');
+    if (!x) return;
     const grad = x.createLinearGradient(0, 0, 0, 208);
     grad.addColorStop(0, '#0f6b3c');
     grad.addColorStop(1, '#0a4a2a');
@@ -449,11 +453,51 @@ export function createWorld(scene) {
   return world;
 }
 
+/** جای ایستادن مشتری جلو هر قفسه (بدون ساخت هیچ شیء گرافیکی) */
+function slotShopSpot(index) {
+  const slot = SLOTS[index % SLOTS.length];
+  return new THREE.Vector3(slot.x, 0, slot.z).add(
+    new THREE.Vector3(0, 0, 0.42).applyAxisAngle(new THREE.Vector3(0, 1, 0), slot.rot)
+  );
+}
+
+/**
+ * دنیای «بدون گرافیک» — وقتی WebGL در دسترس نیست ساخته می‌شود.
+ * همان interface دنیای سه‌بعدی را دارد، پس customers.js و بقیهٔ
+ * منطق بازی بدون تغییر کار می‌کنند؛ فقط چیزی رندر نمی‌شود.
+ */
+export function createHeadlessWorld() {
+  const world = {
+    scene: new THREE.Scene(),
+    shelves: {},
+    scaleAnims: [],
+    floats: [],
+    cashier: null,
+    t: 0,
+    headless: true,
+    redrawSign: null,
+  };
+  PRODUCTS.forEach((p, i) => {
+    world.shelves[p.id] = {
+      group: null,
+      items: [],
+      tag: { draw() {} },
+      shopSpot: slotShopSpot(i),
+      product: p,
+      lastPrice: null,
+    };
+  });
+  world.update = () => {};
+  world.redrawText = () => {};
+  return world;
+}
+
 /**
  * همگام‌سازی قفسه‌ها با موجودی — هنگام خرید، کالاها با انیمیشن
  * «چیده» می‌شوند و هنگام فروش کم می‌شوند.
  */
 export function refreshShelves(world, inventory) {
+  if (!world || !inventory) return;
   for (const p of PRODUCTS) {
     const sh = world.shelves[p.id];
     if (!sh) continue;
@@ -473,6 +517,7 @@ export function refreshShelves(world, inventory) {
 
 /** به‌روزرسانی تگ‌های قیمت فروش روی قفسه‌ها */
 export function refreshTags(world, salePrices) {
+  if (!world || !salePrices) return;
   for (const p of PRODUCTS) {
     const sh = world.shelves[p.id];
     if (!sh) continue;
@@ -483,10 +528,12 @@ export function refreshTags(world, salePrices) {
 
 /** متن شناور بالای صحنه (مثلاً «+۱۲ $») */
 export function floatText(world, text, pos) {
+  if (!world) return;
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 128;
   const x = c.getContext('2d');
+  if (!x) return;
   x.font = '900 64px Vazirmatn, Tahoma, sans-serif';
   x.textAlign = 'center';
   x.textBaseline = 'middle';
