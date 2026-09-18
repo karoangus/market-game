@@ -31,6 +31,7 @@ import * as THREE from 'three';
 import { REGISTER, DOOR, NAV } from './layout.js';
 import { clamp01, lerp, easeInOutCubic } from './anim.js';
 import { sfx } from './sound.js';
+import { getViewportSize, mapPointToLogical, mapDeltaToLogical } from './fullscreen.js';
 
 export const EYE_HEIGHT = 1.62; // ارتفاع چشم بازیکن (اتاق ۲.۸ متری است)
 export const WALK_SPEED = 2.35; // متر بر ثانیه
@@ -191,8 +192,9 @@ export class FirstPerson {
     this.moveInput = { x: 0, y: 0 }; // جوی‌استیک لمسی
 
     // --- FOV و جهت‌گیری صفحه ---
-    const w0 = typeof window !== 'undefined' ? window.innerWidth || 0 : 0;
-    const h0 = typeof window !== 'undefined' ? window.innerHeight || 0 : 0;
+    const s0 = this._size();
+    const w0 = s0.w;
+    const h0 = s0.h;
     this.aspect = w0 > 0 && h0 > 0 ? w0 / h0 : 1;
     this.portrait = this.aspect < 1;
     this.baseFov = computeBaseFov(this.aspect);
@@ -316,7 +318,9 @@ export class FirstPerson {
     });
     document.addEventListener('mousemove', (e) => {
       if (!this.locked || this._paused()) return;
-      this._lookBy(e.movementX || 0, e.movementY || 0, LOOK_SENS_MOUSE);
+      // در حالتِ افقیِ اجباری، جابه‌جاییِ ماوس هم باید بچرخد
+      const d = mapDeltaToLogical(e.movementX || 0, e.movementY || 0);
+      this._lookBy(d.dx, d.dy, LOOK_SENS_MOUSE);
     });
 
     // --- لمسی (Pointer Events: موبایل و لپ‌تاپ لمسی) ---
@@ -371,8 +375,8 @@ export class FirstPerson {
       if (this.elTip) this.elTip.innerHTML = TIP_TOUCH;
     }
     if (e.pointerType === 'mouse' || this._paused()) return;
-    const w = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 800;
-    const h = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 600;
+    const { w, h } = this._size();
+    const p = this._pt(e);
     try {
       if (this.canvas.setPointerCapture) this.canvas.setPointerCapture(e.pointerId);
     } catch (err) {
@@ -380,25 +384,26 @@ export class FirstPerson {
     }
     // در حالت عمودی صفحه باریک است؛ نصف/نصف درست‌تر از ۴۵٪ می‌افتد
     const split = this.portrait ? 0.5 : 0.45;
-    if (e.clientX < w * split && !this._joy) {
+    if (p.x < w * split && !this._joy) {
       // محلِ شکل‌گرفتنِ جوی‌استیک به لبهٔ صفحه قفل می‌شود تا کلِ دستگیره
       // (نه نیمی‌اش) داخل صفحه دیده شود — در حالت عمودی مهم است
       this._joy = {
         id: e.pointerId,
-        ox: Math.max(66, Math.min(w - 66, e.clientX)),
-        oy: Math.max(66, Math.min(h - 66, e.clientY)),
+        ox: Math.max(66, Math.min(w - 66, p.x)),
+        oy: Math.max(66, Math.min(h - 66, p.y)),
       };
       this._tipDismissed = true;
     } else if (!this._look) {
-      this._look = { id: e.pointerId, lx: e.clientX, ly: e.clientY, moved: 0, t0: Date.now() };
+      this._look = { id: e.pointerId, lx: p.x, ly: p.y, moved: 0, t0: Date.now() };
     }
     if (e.preventDefault) e.preventDefault();
   }
 
   _onPointerMove(e) {
     if (this._joy && e.pointerId === this._joy.id) {
-      let dx = e.clientX - this._joy.ox;
-      let dy = e.clientY - this._joy.oy;
+      const p = this._pt(e);
+      let dx = p.x - this._joy.ox;
+      let dy = p.y - this._joy.oy;
       const len = Math.hypot(dx, dy);
       if (len > JOY_RADIUS) {
         dx = (dx / len) * JOY_RADIUS;
@@ -414,17 +419,15 @@ export class FirstPerson {
       return;
     }
     if (this._look && e.pointerId === this._look.id) {
-      const dx = e.clientX - this._look.lx;
-      const dy = e.clientY - this._look.ly;
-      this._look.lx = e.clientX;
-      this._look.ly = e.clientY;
+      const p = this._pt(e);
+      const dx = p.x - this._look.lx;
+      const dy = p.y - this._look.ly;
+      this._look.lx = p.x;
+      this._look.ly = p.y;
       this._look.moved += Math.abs(dx) + Math.abs(dy);
       // حساسیت با اندازهٔ صفحه مقیاس می‌شود (کشیدنِ یکسان = چرخشِ یکسان)
-      const s =
-        typeof window !== 'undefined'
-          ? Math.min(window.innerWidth || 400, window.innerHeight || 400)
-          : 400;
-      this._lookBy(dx, dy, touchLookSens(s));
+      const sz = this._size();
+      this._lookBy(dx, dy, touchLookSens(Math.min(sz.w, sz.h)));
       this._tipDismissed = true;
       if (e.preventDefault) e.preventDefault();
     }
@@ -455,6 +458,32 @@ export class FirstPerson {
     this.touchRun = false;
     if (this.elJoy) this.elJoy.classList.remove('show');
     if (this.elRun) this.elRun.classList.remove('on');
+  }
+
+  // ---------------- اندازه و مختصاتِ «منطقیِ» صفحه ----------------
+  /**
+   * اندازهٔ منطقیِ صفحه (همان چیزی که کاربر می‌بیند).
+   * در حالتِ «افقیِ اجباری» (چرخش با CSS، مخصوص iOS) عرض و ارتفاعِ
+   * فیزیکی جابه‌جا می‌شوند — چون innerWidth/innerHeight با transform
+   * عوض نمی‌شوند.
+   */
+  _size() {
+    const s = getViewportSize();
+    const win = typeof window !== 'undefined' ? window : null;
+    return {
+      w: s.w || (win && win.innerWidth) || 800,
+      h: s.h || (win && win.innerHeight) || 600,
+    };
+  }
+
+  /**
+   * مختصاتِ لمس/ماوس را به دستگاهِ «منطقیِ» صفحه می‌بَرد.
+   * clientX/clientY همیشه نسبت به ویوپورتِ فیزیکی‌اند، حتی وقتی کلِ
+   * صفحه با CSS چرخانده شده باشد — پس بدونِ این تبدیل، جوی‌استیک و
+   * نگاهِ لمسی در حالتِ افقیِ اجباری وارونه کار می‌کردند.
+   */
+  _pt(e) {
+    return mapPointToLogical(e.clientX || 0, e.clientY || 0);
   }
 
   // ---------------- تعامل ----------------

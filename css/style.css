@@ -8,20 +8,52 @@
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
 }
+/* -------------------------------------------------------------
+   ابعاد «منطقیِ» صفحه و safe-area
+   -------------------------------------------------------------
+   --appw/--apph = عرض و ارتفاعی که بازیکن می‌بیند.
+   در حالت عادی همان ویوپورت فیزیکی است؛ ولی وقتی مرورگر قفلِ جهت
+   ندارد (iOS Safari) و کاربر ⛶ تمام‌صفحه را زده، کلِ صفحه با CSS
+   ۹۰ درجه می‌چرخد (کلاس force-landscape) و این دو متغیر جابه‌جا
+   می‌شوند. هر جایی که اندازهٔ صفحه لازم است باید از این‌ها استفاده
+   کند، نه مستقیم از vw/vh — وگرنه در حالتِ چرخانده همه‌چیز کج
+   اندازه می‌شود.
+
+   --sa-* هم safe-area «منطقی» است: در حالتِ چرخانده، بریدگیِ گوشی
+   (notch) به لبهٔ منطقیِ دیگری منتقل می‌شود.
+   ------------------------------------------------------------- */
+:root {
+  --appw: 100vw;
+  --apph: 100vh;
+  --sa-top: env(safe-area-inset-top);
+  --sa-bottom: env(safe-area-inset-bottom);
+  --sa-left: env(safe-area-inset-left);
+  --sa-right: env(safe-area-inset-right);
+}
+/* svh = کوچک‌ترین ویوپورت (با آدرس‌بار) → بدونِ پرش، همان رفتارِ قبلی.
+   فقط پشتِ @supports: مقدارِ نامعتبر داخلِ متغیر، هر ویژگی‌ای که از آن
+   استفاده کند از کار می‌اندازد. */
+@supports (height: 100svh) and (width: 100svw) {
+  :root {
+    --appw: 100svw;
+    --apph: 100svh;
+  }
+}
 html {
   /* برای موبایل: استفاده از dvh/svh تا آدرس‌بار درست حساب شود */
+  /* ارتفاعِ html همیشه «فیزیکی» می‌ماند؛ چرخش روی body انجام می‌شود */
   height: 100%;
   height: 100dvh;
   height: 100svh;
   overflow: hidden;
+  background: #0a141d;
   /* جلوگیری از اسکرول ناخواسته روی iOS */
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
 }
 body {
-  height: 100%;
-  height: 100dvh;
-  height: 100svh;
+  width: 100%;
+  height: var(--apph);
   overflow: hidden;
   font-family: 'Vazirmatn', Tahoma, sans-serif;
   background: #0a141d;
@@ -70,8 +102,8 @@ body.pseudo-fullscreen {
   background: #0a141d;
 }
 html.pseudo-fullscreen body {
-  height: 100% !important;
-  height: 100dvh !important;
+  width: 100% !important;
+  height: var(--apph) !important;
 }
 
 /* ---------- صحنهٔ سه‌بعدی ---------- */
@@ -80,8 +112,6 @@ html.pseudo-fullscreen body {
   inset: 0;
   width: 100%;
   height: 100%;
-  height: 100dvh;
-  height: 100svh;
   display: block;
   touch-action: none; /* کنترل اول‌شخص: لمس صفحه نباید صفحه را اسکرول کند */
   background: #0a141d;
@@ -89,11 +119,8 @@ html.pseudo-fullscreen body {
 :fullscreen #scene,
 :-webkit-full-screen #scene,
 .pseudo-fullscreen #scene {
-  width: 100vw !important;
-  width: 100dvw !important;
-  height: 100vh !important;
-  height: 100dvh !important;
-  height: 100svh !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
 /* ---------- HUD ---------- */
@@ -105,7 +132,6 @@ html.pseudo-fullscreen body {
   /* در تمام‌صفحه هم HUD باید درست بماند */
   width: 100%;
   height: 100%;
-  height: 100dvh;
 }
 .hud-top {
   position: absolute;
@@ -115,7 +141,7 @@ html.pseudo-fullscreen body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: calc(10px + env(safe-area-inset-top)) 12px 8px;
+  padding: calc(10px + var(--sa-top)) 12px 8px;
   /* در حالت عمودی کمی جمع‌وجورتر */
   flex-wrap: wrap;
 }
@@ -189,7 +215,7 @@ html.pseudo-fullscreen body {
   left: 0;
   display: flex;
   gap: 10px;
-  padding: 10px 12px calc(14px + env(safe-area-inset-bottom));
+  padding: 10px 12px calc(14px + var(--sa-bottom));
 }
 .bottom-btn {
   pointer-events: auto;
@@ -229,7 +255,7 @@ html.pseudo-fullscreen body {
 /* ---------- نوار پیشرفت روز ---------- */
 #day-progress {
   position: absolute;
-  bottom: calc(96px + env(safe-area-inset-bottom));
+  bottom: calc(96px + var(--sa-bottom));
   right: 16px;
   left: 16px;
 }
@@ -259,7 +285,7 @@ html.pseudo-fullscreen body {
 /* ---------- توست ---------- */
 #toast-wrap {
   position: absolute;
-  top: calc(58px + env(safe-area-inset-top));
+  top: calc(58px + var(--sa-top));
   right: 0;
   left: 0;
   display: flex;
@@ -312,7 +338,7 @@ html.pseudo-fullscreen body {
   left: 0;
   z-index: 30;
   max-height: 80vh;
-  max-height: 80dvh;
+  max-height: calc(var(--apph) * 0.8);
   display: flex;
   flex-direction: column;
   background: #141e28;
@@ -320,7 +346,7 @@ html.pseudo-fullscreen body {
   border-radius: 22px 22px 0 0;
   transform: translateY(105%);
   transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.3, 1);
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: var(--sa-bottom);
 }
 .sheet.open {
   transform: translateY(0);
@@ -544,13 +570,11 @@ html.pseudo-fullscreen body {
   gap: 14px;
   background: radial-gradient(120% 90% at 50% 0%, #14351f 0%, #0c1f2b 55%, #0a141d 100%);
   padding: 20px;
-  padding-top: calc(20px + env(safe-area-inset-top));
-  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  padding-top: calc(20px + var(--sa-top));
+  padding-bottom: calc(20px + var(--sa-bottom));
   overflow-y: auto;
   overscroll-behavior: contain;
   height: 100%;
-  height: 100dvh;
-  height: 100svh;
 }
 .start-card {
   width: min(420px, 100%);
@@ -669,8 +693,8 @@ html.pseudo-fullscreen body {
   justify-content: center;
   background: rgba(5, 10, 15, 0.6);
   padding: 20px;
-  padding-top: calc(20px + env(safe-area-inset-top));
-  padding-bottom: calc(20px + env(safe-area-inset-bottom));
+  padding-top: calc(20px + var(--sa-top));
+  padding-bottom: calc(20px + var(--sa-bottom));
 }
 .confirm-card {
   width: min(360px, 100%);
@@ -696,7 +720,7 @@ html.pseudo-fullscreen body {
   .sheet {
     right: auto;
     left: 50%;
-    width: min(640px, 92vw);
+    width: min(640px, calc(var(--appw) * 0.92));
     bottom: 24px;
     border-radius: 22px;
     transform: translate(-50%, 105%);
@@ -795,7 +819,7 @@ html.pseudo-fullscreen body {
 .hud-top {
   flex-wrap: wrap;
   gap: 6px;
-  padding: calc(8px + env(safe-area-inset-top)) 10px 6px;
+  padding: calc(8px + var(--sa-top)) 10px 6px;
 }
 .hud-pill {
   padding: 6px 11px;
@@ -817,7 +841,7 @@ html.pseudo-fullscreen body {
 /* ---------- ردیف زیر HUD: خبر زنده + چیپ مأموریت ---------- */
 .hud-sub {
   position: absolute;
-  top: calc(52px + env(safe-area-inset-top));
+  top: calc(52px + var(--sa-top));
   right: 10px;
   left: 10px;
   display: flex;
@@ -900,15 +924,14 @@ html.pseudo-fullscreen body {
   align-items: center;
   justify-content: center;
   padding: 22px;
-  padding-top: calc(22px + env(safe-area-inset-top));
-  padding-bottom: calc(22px + env(safe-area-inset-bottom));
+  padding-top: calc(22px + var(--sa-top));
+  padding-bottom: calc(22px + var(--sa-bottom));
   background: rgba(4, 9, 14, 0.45);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   opacity: 0;
   transition: opacity 0.3s;
   height: 100%;
-  height: 100dvh;
 }
 #day-intro.show {
   opacity: 1;
@@ -927,7 +950,7 @@ html.pseudo-fullscreen body {
   transition: transform 0.38s cubic-bezier(0.2, 1.3, 0.4, 1);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
   max-height: 90vh;
-  max-height: 90dvh;
+  max-height: calc(var(--apph) * 0.9);
   overflow-y: auto;
 }
 #day-intro.show .intro-card {
@@ -1178,7 +1201,7 @@ html.pseudo-fullscreen body {
 
 /* برچسب تعامل (نزدیک قفسه/صندوق شدی) */
 #fp-hint {
-  bottom: calc(148px + env(safe-area-inset-bottom));
+  bottom: calc(148px + var(--sa-bottom));
   right: 50%;
   transform: translateX(50%);
   background: rgba(13, 22, 30, 0.88);
@@ -1189,7 +1212,7 @@ html.pseudo-fullscreen body {
   padding: 8px 15px;
   border-radius: 999px;
   white-space: nowrap;
-  max-width: 92vw;
+  max-width: calc(var(--appw) * 0.92);
   overflow: hidden;
   text-overflow: ellipsis;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
@@ -1199,7 +1222,7 @@ html.pseudo-fullscreen body {
 
 /* راهنمای کنترل (اول بازی — تا اولین تعامل) */
 #fp-tip {
-  bottom: calc(104px + env(safe-area-inset-bottom));
+  bottom: calc(104px + var(--sa-bottom));
   right: 50%;
   transform: translateX(50%);
   background: rgba(10, 18, 26, 0.62);
@@ -1210,7 +1233,7 @@ html.pseudo-fullscreen body {
   padding: 6px 13px;
   border-radius: 999px;
   white-space: nowrap;
-  max-width: 94vw;
+  max-width: calc(var(--appw) * 0.94);
 }
 
 /* جوی‌استیک لمسی — شناور، همان‌جایی که انگشت می‌نشیند */
@@ -1240,7 +1263,7 @@ html.pseudo-fullscreen body {
   pointer-events: auto;
   right: 16px;
   left: auto;
-  bottom: calc(164px + env(safe-area-inset-bottom));
+  bottom: calc(164px + var(--sa-bottom));
   width: 60px;
   height: 60px;
   border-radius: 50%;
@@ -1266,7 +1289,7 @@ html.pseudo-fullscreen body {
   pointer-events: auto;
   left: 16px;
   right: auto;
-  bottom: calc(126px + env(safe-area-inset-bottom));
+  bottom: calc(126px + var(--sa-bottom));
   width: 62px;
   height: 62px;
   border-radius: 50%;
@@ -1292,18 +1315,22 @@ html.pseudo-fullscreen body {
    حالت عمودی (موبایل) — بهبود یافته برای تمام‌صفحه
    ============================================================= */
 @media (orientation: portrait) {
-  html, body {
+  html {
     height: 100dvh;
     height: 100svh;
   }
+  body {
+    width: 100%;
+    height: var(--apph);
+  }
   #scene {
-    height: 100dvh;
-    height: 100svh;
+    width: 100%;
+    height: 100%;
   }
   .hud-top {
     /* در عمودی، ردیف بالا ممکن است دو سطری شود */
     gap: 5px;
-    padding: calc(8px + env(safe-area-inset-top)) 8px 6px;
+    padding: calc(8px + var(--sa-top)) 8px 6px;
   }
   .hud-pill {
     font-size: 12px;
@@ -1316,10 +1343,10 @@ html.pseudo-fullscreen body {
   }
   /* توست و خبر در عمودی پایین‌تر */
   #toast-wrap {
-    top: calc(88px + env(safe-area-inset-top));
+    top: calc(88px + var(--sa-top));
   }
   .hud-sub {
-    top: calc(88px + env(safe-area-inset-top));
+    top: calc(88px + var(--sa-top));
   }
   .news-flash {
     font-size: 11.5px;
@@ -1332,7 +1359,7 @@ html.pseudo-fullscreen body {
   /* دکمه‌های پایین در عمودی جمع‌وجورتر */
   .hud-bottom {
     gap: 8px;
-    padding: 8px 10px calc(12px + env(safe-area-inset-bottom));
+    padding: 8px 10px calc(12px + var(--sa-bottom));
   }
   .bottom-btn {
     font-size: 11px;
@@ -1344,37 +1371,37 @@ html.pseudo-fullscreen body {
   }
   /* کراس‌هیر و راهنماها در عمودی */
   #fp-hint {
-    bottom: calc(132px + env(safe-area-inset-bottom));
+    bottom: calc(132px + var(--sa-bottom));
     font-size: 11px;
     padding: 6px 12px;
   }
   #fp-tip {
-    bottom: calc(92px + env(safe-area-inset-bottom));
+    bottom: calc(92px + var(--sa-bottom));
     font-size: 10.5px;
   }
   #fp-act {
-    bottom: calc(148px + env(safe-area-inset-bottom));
+    bottom: calc(148px + var(--sa-bottom));
     width: 56px;
     height: 56px;
     font-size: 22px;
   }
   #fp-run {
-    bottom: calc(110px + env(safe-area-inset-bottom));
+    bottom: calc(110px + var(--sa-bottom));
     width: 58px;
     height: 58px;
     font-size: 24px;
   }
   #day-progress {
-    bottom: calc(84px + env(safe-area-inset-bottom));
+    bottom: calc(84px + var(--sa-bottom));
   }
 }
 
 @media (orientation: portrait) and (max-width: 600px) {
   #toast-wrap {
-    top: calc(92px + env(safe-area-inset-top));
+    top: calc(92px + var(--sa-top));
   }
   .hud-sub {
-    top: calc(92px + env(safe-area-inset-top));
+    top: calc(92px + var(--sa-top));
   }
   .bottom-btn {
     font-size: 10.5px;
@@ -1405,7 +1432,7 @@ html.pseudo-fullscreen body {
 /* حالت افقی موبایل (landscape) — هم باید کار کند */
 @media (orientation: landscape) and (max-height: 500px) {
   .hud-top {
-    padding: calc(4px + env(safe-area-inset-top)) 8px 4px;
+    padding: calc(4px + var(--sa-top)) 8px 4px;
     gap: 4px;
   }
   .hud-pill {
@@ -1418,13 +1445,13 @@ html.pseudo-fullscreen body {
     font-size: 13px;
   }
   #toast-wrap {
-    top: calc(42px + env(safe-area-inset-top));
+    top: calc(42px + var(--sa-top));
   }
   .hud-sub {
-    top: calc(42px + env(safe-area-inset-top));
+    top: calc(42px + var(--sa-top));
   }
   .hud-bottom {
-    padding: 6px 10px calc(8px + env(safe-area-inset-bottom));
+    padding: 6px 10px calc(8px + var(--sa-bottom));
     gap: 6px;
   }
   .bottom-btn {
@@ -1438,21 +1465,21 @@ html.pseudo-fullscreen body {
     font-size: 16px;
   }
   #day-progress {
-    bottom: calc(58px + env(safe-area-inset-bottom));
+    bottom: calc(58px + var(--sa-bottom));
   }
   #fp-hint {
-    bottom: calc(78px + env(safe-area-inset-bottom));
+    bottom: calc(78px + var(--sa-bottom));
   }
   #fp-tip {
-    bottom: calc(52px + env(safe-area-inset-bottom));
+    bottom: calc(52px + var(--sa-bottom));
   }
   #fp-act {
-    bottom: calc(82px + env(safe-area-inset-bottom));
+    bottom: calc(82px + var(--sa-bottom));
     width: 52px;
     height: 52px;
   }
   #fp-run {
-    bottom: calc(62px + env(safe-area-inset-bottom));
+    bottom: calc(62px + var(--sa-bottom));
     width: 54px;
     height: 54px;
   }
@@ -1483,12 +1510,12 @@ html.pseudo-fullscreen body {
 :fullscreen .hud-top,
 :-webkit-full-screen .hud-top,
 .pseudo-fullscreen .hud-top {
-  padding-top: calc(10px + env(safe-area-inset-top));
+  padding-top: calc(10px + var(--sa-top));
 }
 :fullscreen .hud-bottom,
 :-webkit-full-screen .hud-bottom,
 .pseudo-fullscreen .hud-bottom {
-  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  padding-bottom: calc(14px + var(--sa-bottom));
 }
 
 /* ===== بازی‌های دیگر (لینک از صفحهٔ شروع) ===== */
@@ -1523,12 +1550,182 @@ html.pseudo-fullscreen body {
 
 /* ===== پشتیبانی از visualViewport روی موبایل ===== */
 @supports (height: 100dvh) {
-  html, body, #scene, #hud, #start-screen, #day-intro {
+  html {
     height: 100dvh;
+  }
+  body {
+    height: var(--apph);
+  }
+  #scene, #hud, #start-screen, #day-intro {
+    height: 100%;
   }
 }
 @supports (height: 100svh) {
   html {
     /* svh = کوچک‌ترین viewport (بدون آدرس‌بار) — برای جلوگیری از پرش */
   }
+}
+
+/* =============================================================
+   افقیِ اجباری (force-landscape) — «⛶ تمام‌صفحه = افقی»
+   =============================================================
+   بعضی مرورگرها (مخصوصاً Safari روی آیفون) نه Fullscreen API دارند
+   نه Screen Orientation lock. برای این‌ها دکمهٔ تمام‌صفحه صفحه را
+   شبه‌تمام‌صفحه می‌کند و همین‌جا کلِ <body> نود درجه می‌چرخد تا
+   بازی «افقی» دیده شود — بدونِ اینکه کاربر لازم باشد گوشی را
+   بچرخاند.
+
+   چرخش: `rotate(90deg) translateY(-100%)` با origin گوشهٔ بالا-چپ.
+   یعنی نقطهٔ منطقی (x,y) روی صفحهٔ فیزیکی می‌افتد در (W−y, x)
+   (W = عرضِ فیزیکی). چون body یک transform دارد، همهٔ فرزندانِ
+   position:fixed هم داخلِ همین قابِ چرخانده قرار می‌گیرند و
+   --appw/--apph و --sa-* مقادیر «منطقی» می‌گیرند.
+
+   ⚠️ مختصاتِ لمس (clientX/clientY) همیشه فیزیکی است؛ پس js/fps.js
+      آن را با mapPointToLogical() به این دستگاه برمی‌گرداند.
+   ============================================================= */
+html.force-landscape {
+  /* جایِ عرض و ارتفاعِ فیزیکی عوض می‌شود: ارتفاعِ گوشی می‌شود عرضِ بازی */
+  --appw: 100vh;
+  --apph: 100vw;
+  /* بریدگیِ گوشی: لبهٔ فیزیکیِ بالا → چپِ منطقی، پایینِ فیزیکی → راستِ منطقی */
+  --sa-top: env(safe-area-inset-right);
+  --sa-bottom: env(safe-area-inset-left);
+  --sa-left: env(safe-area-inset-top);
+  --sa-right: env(safe-area-inset-bottom);
+}
+@supports (height: 100svh) and (width: 100svw) {
+  html.force-landscape {
+    --appw: 100svh;
+    --apph: 100svw;
+  }
+}
+html.force-landscape,
+html.force-landscape body {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+html.force-landscape body {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: auto !important;
+  bottom: auto !important;
+  width: var(--appw) !important;
+  height: var(--apph) !important;
+  transform: rotate(90deg) translateY(-100%) !important;
+  transform-origin: 0 0 !important;
+}
+/* بومِ سه‌بعدی و لایه‌های روی آن دقیقاً به اندازهٔ قابِ چرخانده */
+html.force-landscape #scene,
+html.force-landscape #hud,
+html.force-landscape #start-screen,
+html.force-landscape #day-intro,
+html.force-landscape #sheet-backdrop {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* --- چیدمانِ جمع‌وجور: صفحهٔ چرخانده «پهن و کوتاه» است ---
+   همان تنظیماتی که برای افقیِ واقعیِ موبایل (max-height: 500px)
+   داریم، این‌جا با کلاس اعمال می‌شود چون media query جهتِ فیزیکی
+   را می‌بیند، نه جهتِ منطقی را. */
+html.force-landscape .hud-top {
+  padding: calc(4px + var(--sa-top)) calc(8px + var(--sa-right)) 4px calc(8px + var(--sa-left));
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+html.force-landscape .hud-pill {
+  padding: 4px 9px;
+  font-size: 11px;
+}
+html.force-landscape .icon-btn {
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+}
+html.force-landscape #toast-wrap,
+html.force-landscape .hud-sub {
+  top: calc(42px + var(--sa-top));
+}
+html.force-landscape .news-flash {
+  font-size: 11px;
+  padding: 5px 11px;
+}
+html.force-landscape .quest-chip {
+  font-size: 10.5px;
+  padding: 4px 9px;
+}
+html.force-landscape .hud-bottom {
+  padding: 6px calc(10px + var(--sa-right)) calc(8px + var(--sa-bottom)) calc(10px + var(--sa-left));
+  gap: 6px;
+}
+html.force-landscape .bottom-btn {
+  padding: 6px 4px;
+  font-size: 10px;
+  flex-direction: row;
+  gap: 4px;
+  justify-content: center;
+  border-radius: 14px;
+}
+html.force-landscape .bottom-btn .b-emoji {
+  font-size: 16px;
+}
+html.force-landscape #day-progress {
+  bottom: calc(58px + var(--sa-bottom));
+}
+html.force-landscape #fp-hint {
+  bottom: calc(78px + var(--sa-bottom));
+  font-size: 11px;
+  padding: 5px 11px;
+}
+html.force-landscape #fp-tip {
+  bottom: calc(52px + var(--sa-bottom));
+  font-size: 10px;
+}
+html.force-landscape #fp-act {
+  bottom: calc(82px + var(--sa-bottom));
+  width: 52px;
+  height: 52px;
+  font-size: 22px;
+}
+html.force-landscape #fp-run {
+  bottom: calc(62px + var(--sa-bottom));
+  width: 54px;
+  height: 54px;
+  font-size: 24px;
+}
+html.force-landscape #start-screen {
+  padding: 12px;
+  padding-left: calc(12px + var(--sa-left));
+  padding-right: calc(12px + var(--sa-right));
+  gap: 8px;
+}
+html.force-landscape .start-card {
+  padding: 16px 14px;
+  max-height: 100%;
+}
+html.force-landscape .start-card h1 {
+  font-size: 22px;
+}
+html.force-landscape .start-emoji {
+  font-size: 36px;
+}
+html.force-landscape .start-steps {
+  margin: 10px 0;
+  gap: 6px;
+}
+html.force-landscape .start-steps li {
+  padding: 6px 10px;
+  font-size: 11.5px;
+}
+html.force-landscape .start-hint {
+  font-size: 10.5px;
+}
+html.force-landscape .intro-card {
+  padding: 16px 16px 14px;
+  max-height: calc(var(--apph) * 0.94);
+}
+html.force-landscape .sheet {
+  max-height: calc(var(--apph) * 0.92);
 }

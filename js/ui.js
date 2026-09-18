@@ -175,12 +175,13 @@ function syncFullscreenUi() {
       b.classList.toggle('active', on);
       // عنوان دکمه را هم عوض کن
       if (on) {
-        b.title = 'خروج از تمام‌صفحه';
+        b.title = 'خروج از تمام‌صفحه (و برگشت به جهتِ آزاد)';
         if (b.id === 'btn-fs-start') b.textContent = '↩ خروج از تمام‌صفحه';
         if (b.id === 'btn-fullscreen') b.textContent = '⛶';
       } else {
-        b.title = 'نمایش تمام‌صفحه';
-        if (b.id === 'btn-fs-start') b.textContent = '⛶ تمام‌صفحه';
+        // ⛶ تمام‌صفحه روی موبایل یعنی «افقی» — عنوان دکمه هم همین را بگوید
+        b.title = 'تمام‌صفحه و افقی‌کردنِ صفحه';
+        if (b.id === 'btn-fs-start') b.textContent = '⛶ تمام‌صفحهٔ افقی';
         if (b.id === 'btn-fullscreen') b.textContent = '⛶';
       }
     }
