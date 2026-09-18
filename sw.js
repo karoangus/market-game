@@ -14,7 +14,7 @@
 //  ➕ هنگام تغییر فایل‌های اپ، VERSION را تغییر بده تا کش‌های قدیمی
 //     پاک شوند (در activate همهٔ کش‌های versionهای قبل حذف می‌شوند).
 // =============================================================
-const VERSION = 'market-game-v6';
+const VERSION = 'market-game-v7';
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 
@@ -36,6 +36,7 @@ const APP_SHELL = [
   './js/story.js',
   './js/scene3d.js',
   './js/fps.js',
+  './js/fullscreen.js',
   './js/customers.js',
   './js/ui.js',
   './js/main.js',

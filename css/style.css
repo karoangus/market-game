@@ -548,6 +548,26 @@ button {
   text-align: center;
 }
 
+/* ---------- ردیف دکمه‌های کوچک صفحهٔ شروع (شروع‌از‌نو + تمام‌صفحه) ---------- */
+.start-mini-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+.start-mini-row .mini {
+  margin-top: 0;
+}
+
+/* ---------- دکمهٔ تمام‌صفحه: حالت فعال ---------- */
+.icon-btn.active,
+.mini.active {
+  color: #ffe066;
+  border-color: rgba(255, 224, 102, 0.55);
+  background: rgba(255, 224, 102, 0.14);
+}
+
 /* ---------- جعبهٔ تأیید ---------- */
 #confirm-box {
   position: fixed;
@@ -1137,6 +1157,61 @@ button {
 }
 #fp-act:active {
   transform: scale(0.9);
+}
+
+/* دکمهٔ دویدن (موبایل) — نگه‌داشتن = تندروی.
+   پایینِ سمت چپ: جایی که شستِ دومِ بازیکن راحت می‌رسد،
+   و از دکمهٔ تعاملِ سمت راست دور است */
+#fp-run {
+  pointer-events: auto;
+  left: 16px;
+  right: auto;
+  bottom: calc(126px + env(safe-area-inset-bottom));
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  background: rgba(13, 22, 30, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  user-select: none;
+  -webkit-user-select: none;
+}
+#fp-run.on {
+  background: linear-gradient(135deg, #f6c945, #e09a1f);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: scale(1.06);
+}
+
+/* ---------- حالت عمودی (موبایل) ----------
+   در حالت عمودی ردیف بالای HUD به دو سطر می‌شود؛ نوار خبر و توست‌ها
+   باید پایین‌تر بیایند تا روی سطر دوم نیفتند. دکمه‌های پایین هم
+   روی صفحه‌های باریک کمی جمع‌وجورتر می‌شوند. */
+@media (orientation: portrait) and (max-width: 600px) {
+  #toast-wrap {
+    top: calc(98px + env(safe-area-inset-top));
+  }
+  .hud-sub {
+    top: calc(98px + env(safe-area-inset-top));
+  }
+  .bottom-btn {
+    font-size: 11.5px;
+  }
+  .bottom-btn .b-emoji {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 360px) {
+  .hud-pill {
+    padding: 5px 9px;
+    font-size: 12px;
+  }
 }
 
 /* ===== بازی‌های دیگر (لینک از صفحهٔ شروع) ===== */

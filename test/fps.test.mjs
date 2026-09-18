@@ -22,6 +22,11 @@ import {
   WALK_SPEED,
   RUN_SPEED,
   PLAYER_RADIUS,
+  computeBaseFov,
+  touchLookSens,
+  BASE_FOV,
+  PORTRAIT_FOV_MAX,
+  RUN_FOV_BOOST,
 } from '../js/fps.js';
 import { ROOM, SHELF_SLOTS, REGISTER, NAV } from '../js/layout.js';
 
@@ -261,6 +266,78 @@ function makeFakeFirstPerson(nav) {
   check(doorLog[doorLog.length - 1] === false, 'بعد از ورود، در بسته شد');
   check(near(fp2.pos.x, PLAYER_SPAWN.x, 1e-6) && near(fp2.pos.z, PLAYER_SPAWN.z, 1e-6),
     'اینترو دقیقاً روی نقطهٔ شروع بازیکن تمام می‌شود');
+}
+
+// ---------- ۷) FOV پویا: حالت عمودی + تندروی ----------
+console.log('۷) computeBaseFov — FOV بر اساس جهت‌گیری صفحه');
+{
+  check(computeBaseFov(16 / 9) === BASE_FOV, 'حالت افقی: FOV عمودی همان ۶۸ می‌ماند');
+  check(computeBaseFov(1) === BASE_FOV, 'صفحهٔ مربع: FOV پایه');
+  const p = computeBaseFov(390 / 844); // موبایلِ رایج، عمودی
+  check(
+    p > BASE_FOV && p <= PORTRAIT_FOV_MAX,
+    `حالت عمودی: دید پهن‌تر می‌شود ولی فیش‌ای نمی‌شود (${p.toFixed(1)}°)`
+  );
+  check(
+    computeBaseFov(0.5) > computeBaseFov(0.85),
+    'هرچه صفحه باریک‌تر، FOV پهن‌تر'
+  );
+  check(computeBaseFov(0) === BASE_FOV, 'aspect نامعتبر → مقدار پیش‌فرض');
+  check(computeBaseFov(NaN) === BASE_FOV, 'aspect NaN → مقدار پیش‌فرض');
+  check(computeBaseFov(-2) === BASE_FOV, 'aspect منفی → مقدار پیش‌فرض');
+}
+
+console.log('۸) touchLookSens — حساسیت نگاهِ لمسی با اندازهٔ صفحه مقیاس می‌شود');
+{
+  check(touchLookSens(400) > 0, 'حساسیت مثبت است');
+  check(touchLookSens(1000) >= touchLookSens(400), 'صفحهٔ بزرگ‌تر → حساسیتِ کمتر/مساوی در هر پیکسل');
+  check(touchLookSens(100) === touchLookSens(200), 'صفحه‌های خیلی کوچک قفل (clamp) می‌شوند');
+  check(touchLookSens(1000) === touchLookSens(1600), 'صفحه‌های خیلی بزرگ قفل (clamp) می‌شوند');
+}
+
+console.log('۹) کنترل‌کننده: FOV عمودی، همگام‌سازی نرم، و بولستِ تندروی');
+{
+  const nav = new NavGrid();
+  const { fp } = makeFakeFirstPerson(nav);
+
+  // در حالت عمودی، FOV پایه باید پهن‌تر از حالت افقی شود
+  fp.setAspect(16 / 9);
+  check(fp.baseFov === BASE_FOV, 'setAspect افقی → FOV پایه');
+  fp.setAspect(390 / 844);
+  check(fp.baseFov > BASE_FOV, `setAspect عمودی → FOV پایه پهن‌تر (${fp.baseFov.toFixed(1)})`);
+  check(fp.portrait === true, 'پرچم portrait روشن می‌شود');
+
+  // دوربین واقعی (شبه‌three.js): FOV باید به‌آرامی به مقصد برسد
+  let camFov = 68;
+  const cam = {
+    position: { set() {} },
+    rotation: { order: '', set() {} },
+    fov: 68,
+    updateProjectionMatrix() {
+      camFov = this.fov;
+    },
+  };
+  const world = { shelves: {}, nav, setDoor() {}, headless: false };
+  const fp2 = new FirstPerson({ camera: cam, canvas: { addEventListener() {}, style: {} }, world, isBlocked: () => false });
+  fp2.attract = false;
+  fp2.setAspect(390 / 844);
+  for (let i = 0; i < 120; i++) fp2.update(1 / 60, false);
+  check(camFov > 68 && camFov <= PORTRAIT_FOV_MAX + 1, `دوربین به FOV عمودی همگام شد (${camFov.toFixed(1)}°)`);
+
+  // هنگام تندروی، FOV هدف کمی باز‌تر است
+  fp2.keys.KeyW = true;
+  fp2.touchRun = true; // معادلِ نگه‌داشتنِ دکمهٔ 🏃
+  fp2.update(1 / 60, false);
+  check(
+    fp2.fovTarget === fp2.baseFov + RUN_FOV_BOOST,
+    `تندروی → FOV هدف ${RUN_FOV_BOOST} درجه باز‌تر (${fp2.fovTarget.toFixed(1)})`
+  );
+
+  // با رهاکردن، FOV هدف به پایه برمی‌گردد
+  fp2.keys.KeyW = false;
+  fp2.touchRun = false;
+  fp2.update(1 / 60, false);
+  check(fp2.fovTarget === fp2.baseFov, 'پایان تندروی → FOV هدف به پایه برمی‌گردد');
 }
 
 console.log('');

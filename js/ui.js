@@ -6,6 +6,7 @@ import { PRODUCTS, GAME } from './config.js';
 import { demandInfo } from './economy.js';
 import { levelInfo, levelTitle, questProgress, QUEST_TYPES, WEATHERS } from './story.js';
 import { fa } from './util.js';
+import { fullscreenApi, isFullscreen } from './fullscreen.js';
 
 let cb = {};
 const $ = (id) => document.getElementById(id);
@@ -162,6 +163,29 @@ export function setQuest(quest, stats) {
 export function setSound(on) {
   const b = $('btn-sound');
   if (b) b.textContent = on ? '🔊' : '🔇';
+}
+
+// ---------- دکمهٔ تمام‌صفحه ----------
+/** حالتِ «روشن» دکمهٔ تمام‌صفحه را با وضعیت واقعی مرورگر هم‌گام می‌کند */
+function syncFullscreenUi() {
+  const on = isFullscreen();
+  for (const id of ['btn-fullscreen', 'btn-fs-start']) {
+    const b = $(id);
+    if (b) b.classList.toggle('active', on);
+  }
+}
+
+/**
+ * اتصال دکمهٔ تمام‌صفحه (HUD + صفحهٔ شروع) و گوش‌دادن به رویداد تغییر
+ * آن. در مرورگرهای بدون API، دکمه همچنان کار می‌کند — hook اصلی
+ * (cb.toggleFullscreen) پیام راهنما نشان می‌دهد.
+ */
+export function initFullscreenButton() {
+  const api = typeof document !== 'undefined' ? fullscreenApi() : null;
+  if (api && typeof document.addEventListener === 'function') {
+    document.addEventListener(api.change, syncFullscreenUi);
+  }
+  syncFullscreenUi();
 }
 
 // ---------- کارت داستان روز ----------
@@ -474,6 +498,13 @@ export function initUI(hooks) {
   $('btn-sound').addEventListener('click', () => cb.toggleSound && cb.toggleSound());
   $('btn-start-day').addEventListener('click', () => cb.startDay());
   $('btn-reset-view').addEventListener('click', () => cb.resetView());
+
+  // تمام‌صفحه (هم روی HUD، هم دکمهٔ صفحهٔ شروع)
+  for (const id of ['btn-fullscreen', 'btn-fs-start']) {
+    const b = $(id);
+    if (b) b.addEventListener('click', () => cb.toggleFullscreen && cb.toggleFullscreen());
+  }
+  initFullscreenButton();
   $('intro-close').addEventListener('click', () => hideDayIntro());
   $('day-intro').addEventListener('click', (e) => {
     if (e.target.id === 'day-intro') hideDayIntro();

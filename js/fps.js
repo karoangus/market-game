@@ -16,6 +16,9 @@
 //   • تکانِ سر هنگام قدم (head-bob) + چرخش خفیف سر هنگام پهلو رفتن
 //   • نفس‌کشیدن ملایم وقتی ساکنی + صدای قدم
 //   • کراس‌هیر وسط صفحه + برچسب تعامل روی قفسه‌ها و صندوق
+//   • FOV پویا: در حالت عمودی (موبایل) دید پهن‌تر می‌شود تا «عرض»
+//     دید تنگ نشود + هنگام تندروی FOV کمی باز می‌شود (حس سرعت)
+//   • دکمهٔ 🏃 در موبایل: نگه‌داشتن = تندروی
 //   • اینتروی سینمایی: دوربین از پیاده‌رو میاد، در باز میشه و چشم‌ت
 //     داخل فروشگاه قرار می‌گیره
 //   • حالت attract: قبل از شروع بازی، دوربین آرام این‌طرف‌وآن‌طرف
@@ -41,6 +44,15 @@ const LOOK_SENS_TOUCH = 0.0044;
 const AIM_DIST = 2.7; // تا این فاصله می‌شود با قفسه/صندوق تعامل کرد
 const JOY_RADIUS = 46; // شعاع جوی‌استیک لمسی (پیکسل)
 
+// ---------- FOV (میدان دید) ----------
+export const BASE_FOV = 68; // FOV عمودی پایه (درجه) — حالت افقی/دسکتاپ
+export const PORTRAIT_FOV_MAX = 92; // سقف FOV عمودی در حالت عمودی (ضد فیش‌ای)
+export const RUN_FOV_BOOST = 8; // باز شدن FOV هنگام تندروی (حس سرعت)
+
+// ---------- متن راهنمای کنترل ----------
+const TIP_TOUCH = '🕹️ چپ: راه‌رفتن · 🏃 نگه‌دار = دویدن · راست: نگاه';
+const TIP_MOUSE = '🖱️ کلیک: دوربین · WASD حرکت · Shift دویدن · E تعامل';
+
 // =============================================================
 //  توابع خالص — منطق اصلی، بدون هیچ وابستگی به DOM
 // =============================================================
@@ -55,6 +67,31 @@ export function normalizeAngle(a) {
 /** سقف بالا/پایین نگاه‌کردن */
 export function clampPitch(p) {
   return Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, p));
+}
+
+/**
+ * FOV عمودی دوربین (درجه) بر اساس نسبت عرض/ارتفاعِ صفحه.
+ * حالت افقی: همیشه ۶۸. حالت عمودی (موبایل): دید را می‌گشاییم تا
+ * «عرض» دید — یعنی بعدِ کوتاهِ صفحه — تنگ و خفه نشود؛ با سقفی
+ * تا فیش‌ای‌ای نشود. (در three.js، fov همیشه FOVِ عمودی است.)
+ */
+export function computeBaseFov(aspect) {
+  if (typeof aspect !== 'number' || !isFinite(aspect) || aspect <= 0) return BASE_FOV;
+  if (aspect >= 1) return BASE_FOV;
+  // بخواهیم FOVِ افقی همان ۶۸ درجه بماند: vFOV = 2·atan(tan(34°)/aspect)
+  const half = (BASE_FOV * Math.PI) / 360;
+  const v = (2 * Math.atan(Math.tan(half) / aspect) * 180) / Math.PI;
+  return Math.min(PORTRAIT_FOV_MAX, Math.max(BASE_FOV, v));
+}
+
+/**
+ * حساسیت نگاهِ لمسی، مقیاس‌شده با بعدِ کوتاهِ صفحه:
+ * کشیدنِ فاصلهٔ فیزیکیِ یکسان روی صفحهٔ بزرگ‌تر نباید بیشتر بچرخاند.
+ * (مرجع: ۴۰۰ پیکسل → ضریب ۱؛ محدود به ۰.۷۵ تا ۱.۴۵)
+ */
+export function touchLookSens(shortPx) {
+  const s = Math.max(200, Math.min(900, shortPx || 400));
+  return LOOK_SENS_TOUCH * Math.max(0.75, Math.min(1.45, s / 400));
 }
 
 /**
@@ -153,6 +190,16 @@ export class FirstPerson {
     this.keys = Object.create(null);
     this.moveInput = { x: 0, y: 0 }; // جوی‌استیک لمسی
 
+    // --- FOV و جهت‌گیری صفحه ---
+    const w0 = typeof window !== 'undefined' ? window.innerWidth || 0 : 0;
+    const h0 = typeof window !== 'undefined' ? window.innerHeight || 0 : 0;
+    this.aspect = w0 > 0 && h0 > 0 ? w0 / h0 : 1;
+    this.portrait = this.aspect < 1;
+    this.baseFov = computeBaseFov(this.aspect);
+    this.fov = this.baseFov; // FOV فعلی (نرم‌شده)
+    this.fovTarget = this.baseFov;
+    this.touchRun = false; // دکمهٔ 🏃 (موبایل) — نگه‌دار تا بدوی
+
     // --- حالت‌ها ---
     this.mode = 'play'; // play | intro | reset
     this.attract = true; // تا بازی شروع نشده، دوربین خودکار می‌چرخد
@@ -199,16 +246,28 @@ export class FirstPerson {
     };
     this.elCross = mk('fp-cross', 'fp-el', '<i></i>');
     this.elHint = mk('fp-hint', 'fp-el', '');
-    this.elTip = mk(
-      'fp-tip',
-      'fp-el',
-      this.touchMode
-        ? '🕹️ سمت چپ صفحه: راه‌رفتن · سمت راست: نگاه کردن'
-        : '🖱️ برای گرفتن دوربین کلیک کن · WASD حرکت · E تعامل'
-    );
+    this.elTip = mk('fp-tip', 'fp-el', this.touchMode ? TIP_TOUCH : TIP_MOUSE);
     this.elJoy = mk('fp-joy', 'fp-el', '<div id="fp-joy-knob"></div>');
+    this.elRun = mk('fp-run', 'fp-el', '🏃');
     this.elAct = mk('fp-act', 'fp-el', '✋');
     this._hintText = '';
+    // دکمهٔ 🏃: نگه‌داشتن = تندروی (معادل Shift)
+    if (this.elRun && this.elRun.addEventListener) {
+      this.elRun.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.touchRun = true;
+        this._tipDismissed = true;
+        this.elRun.classList.add('on');
+      });
+      const offRun = () => {
+        this.touchRun = false;
+        if (this.elRun) this.elRun.classList.remove('on');
+      };
+      this.elRun.addEventListener('pointerup', offRun);
+      this.elRun.addEventListener('pointercancel', offRun);
+      this.elRun.addEventListener('pointerleave', offRun);
+    }
     if (this.elAct && this.elAct.addEventListener) {
       this.elAct.addEventListener('pointerdown', (e) => {
         e.preventDefault();
@@ -309,18 +368,26 @@ export class FirstPerson {
   _onPointerDown(e) {
     if (e.pointerType !== 'mouse' && !this.touchMode) {
       this.touchMode = true; // اولین لمس → حالت لمسی فعال شود
-      if (this.elTip)
-        this.elTip.innerHTML = '🕹️ سمت چپ صفحه: راه‌رفتن · سمت راست: نگاه کردن';
+      if (this.elTip) this.elTip.innerHTML = TIP_TOUCH;
     }
     if (e.pointerType === 'mouse' || this._paused()) return;
     const w = typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 800;
+    const h = typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 600;
     try {
       if (this.canvas.setPointerCapture) this.canvas.setPointerCapture(e.pointerId);
     } catch (err) {
       /* بعضی مرورگرها capture ندارند — اشکالی ندارد */
     }
-    if (e.clientX < w * 0.45 && !this._joy) {
-      this._joy = { id: e.pointerId, ox: e.clientX, oy: e.clientY };
+    // در حالت عمودی صفحه باریک است؛ نصف/نصف درست‌تر از ۴۵٪ می‌افتد
+    const split = this.portrait ? 0.5 : 0.45;
+    if (e.clientX < w * split && !this._joy) {
+      // محلِ شکل‌گرفتنِ جوی‌استیک به لبهٔ صفحه قفل می‌شود تا کلِ دستگیره
+      // (نه نیمی‌اش) داخل صفحه دیده شود — در حالت عمودی مهم است
+      this._joy = {
+        id: e.pointerId,
+        ox: Math.max(66, Math.min(w - 66, e.clientX)),
+        oy: Math.max(66, Math.min(h - 66, e.clientY)),
+      };
       this._tipDismissed = true;
     } else if (!this._look) {
       this._look = { id: e.pointerId, lx: e.clientX, ly: e.clientY, moved: 0, t0: Date.now() };
@@ -352,7 +419,12 @@ export class FirstPerson {
       this._look.lx = e.clientX;
       this._look.ly = e.clientY;
       this._look.moved += Math.abs(dx) + Math.abs(dy);
-      this._lookBy(dx, dy, LOOK_SENS_TOUCH);
+      // حساسیت با اندازهٔ صفحه مقیاس می‌شود (کشیدنِ یکسان = چرخشِ یکسان)
+      const s =
+        typeof window !== 'undefined'
+          ? Math.min(window.innerWidth || 400, window.innerHeight || 400)
+          : 400;
+      this._lookBy(dx, dy, touchLookSens(s));
       this._tipDismissed = true;
       if (e.preventDefault) e.preventDefault();
     }
@@ -380,7 +452,9 @@ export class FirstPerson {
     this._look = null;
     this.moveInput.x = 0;
     this.moveInput.y = 0;
+    this.touchRun = false;
     if (this.elJoy) this.elJoy.classList.remove('show');
+    if (this.elRun) this.elRun.classList.remove('on');
   }
 
   // ---------------- تعامل ----------------
@@ -398,6 +472,18 @@ export class FirstPerson {
       }));
     }
     return this._shelfAims;
+  }
+
+  /**
+   * به‌روزرسانی نسبت عرض/ارتفاع صفحه (چرخش گوشی، resize، تمام‌صفحه).
+   * در حالت عمودی میدان دید پهن‌تر می‌شود تا «عرض» دید تنگ نشود.
+   * خودِ دوربین در هر فریم به‌آرامی به FOV تازه همگام می‌شود.
+   */
+  setAspect(aspect) {
+    if (typeof aspect !== 'number' || !isFinite(aspect) || aspect <= 0) return;
+    this.aspect = aspect;
+    this.portrait = aspect < 1;
+    this.baseFov = computeBaseFov(aspect);
   }
 
   // ---------------- اینتروی سینمایی ----------------
@@ -535,6 +621,7 @@ export class FirstPerson {
     // چرخش ملایم خودکار — صفحهٔ بازی پشتِ منو زنده است
     this.yaw = normalizeAngle(sp.yaw + Math.sin(this.attractT * 0.3) * 0.17);
     this.pitch = sp.pitch + Math.sin(this.attractT * 0.22) * 0.045;
+    this.fovTarget = this.baseFov;
   }
 
   _inputVector() {
@@ -558,8 +645,11 @@ export class FirstPerson {
   _playTick(dt) {
     const inp = this._inputVector();
     const moving = Math.abs(inp.x) + Math.abs(inp.y) > 0.05;
-    const running = (this.keys.ShiftLeft || this.keys.ShiftRight) && inp.y > 0.1;
+    // تندروی: Shift (دسکتاپ) یا نگه‌داشتنِ دکمهٔ 🏃 (موبایل) — فقط وقتی به جلو می‌روی
+    const running = ((this.keys.ShiftLeft || this.keys.ShiftRight) || this.touchRun) && inp.y > 0.1;
     const speed = running ? RUN_SPEED : WALK_SPEED;
+    // FOV هنگام تندروی کمی باز می‌شود (حس سرعت) — وگرنه به پایه برمی‌گردد
+    this.fovTarget = this.baseFov + (running ? RUN_FOV_BOOST : 0);
 
     // جهتِ جهانیِ حرکت: محلیِ دوربین → جهان
     const sy = Math.sin(this.yaw);
@@ -616,6 +706,10 @@ export class FirstPerson {
 
   _applyCamera(dt) {
     this.idleT += dt;
+    // FOV را به‌آرامی به مقصد می‌رسانیم (پرش‌ناگه نمی‌خوایم)
+    const kF = 1 - Math.exp(-(dt || 0.016) * 5);
+    this.fov = lerp(this.fov, this.fovTarget, kF);
+    this._applyCameraFov();
     // نوسانِ سر: بالا/پایین + چپ/راست + رول خفیف
     const bobY = Math.sin(this.bobPhase * 2) * 0.028 * this.bobAmp;
     const bobX = Math.cos(this.bobPhase) * 0.012 * this.bobAmp;
@@ -642,10 +736,27 @@ export class FirstPerson {
     this.camera.rotation.set(this.pitch, this.yaw, this.roll);
   }
 
+  /** اعمال FOV روی دوربین واقعی (در تست‌ها دوربین جعلی، fov ندارد) */
+  _applyCameraFov() {
+    const c = this.camera;
+    if (c && typeof c.fov === 'number' && typeof c.updateProjectionMatrix === 'function') {
+      if (Math.abs(c.fov - this.fov) > 0.02) {
+        c.fov = this.fov;
+        c.updateProjectionMatrix();
+      }
+    }
+  }
+
   // ---------------- هم‌گام‌سازی DOM ----------------
   _syncDom(blocked) {
     if (!this.elCross) return;
     const inGame = !this.attract && this.mode !== 'intro';
+    // اگر پنلی روی صفحه باز شود، دکمهٔ دویدن «رها شده» فرض می‌شود — انگشت
+    // ممکن است روی پنل رها شده باشد و pointerup به دکمه نرسیده باشد.
+    if (blocked && this.touchRun) {
+      this.touchRun = false;
+      if (this.elRun) this.elRun.classList.remove('on');
+    }
     const showAim = inGame && !blocked && !!this.aim;
     toggle(this.elCross, inGame && !blocked);
     this.elCross.classList.toggle('on', showAim);
@@ -662,6 +773,7 @@ export class FirstPerson {
       inGame && !blocked && !this._tipDismissed && !this.locked && this.mode === 'play'
     );
     toggle(this.elAct, showAim && this.touchMode);
+    toggle(this.elRun, inGame && !blocked && this.touchMode);
     // جوی‌استیک فقط وقتی انگشت روی آن است
     if (this._joy && this.elJoy) {
       this.elJoy.classList.add('show');
