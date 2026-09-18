@@ -1,0 +1,16 @@
+{
+  "name": "three",
+  "version": "0.160.0",
+  "description": "three.js (نسخهٔ محلی داخل پروژه — همان چیزی که importmap در index.html به آن اشاره می‌کند)",
+  "type": "module",
+  "main": "./build/three.module.js",
+  "module": "./build/three.module.js",
+  "exports": {
+    ".": "./build/three.module.js",
+    "./build/three.module.js": "./build/three.module.js",
+    "./addons/*": "./examples/jsm/*",
+    "./examples/jsm/*": "./examples/jsm/*",
+    "./package.json": "./package.json"
+  },
+  "license": "MIT"
+}

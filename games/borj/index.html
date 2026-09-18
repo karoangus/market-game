@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <title>دویدن تا برج — بازی پلتفرمر دوبعدی فارسی</title>
+    <meta name="description" content="دویدن تا برج: بازی پلتفرمر دوبعدی فارسی با پنج مرحله، سکه، دشمن، سکوی متحرک و برج سرخ." />
+    <meta name="theme-color" content="#0e1220" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- ============ صفحهٔ آغاز و انتخاب مرحله ============ -->
+    <section id="screen-title" class="screen">
+      <div class="title-wrap">
+        <div class="hero-art" aria-hidden="true">
+          <div class="tower"></div>
+          <div class="runner"></div>
+        </div>
+        <h1>دویدن تا برج</h1>
+        <p class="sub">یک پلتفرمر دوبعدیِ فارسی — پنج مرحله، از دهکدهٔ سنگاب تا برج سرخ</p>
+        <div class="stars-total">⭐ ستاره‌های تو: <b id="stat-stars">۰</b> از <b id="stat-stars-max">۱۵</b></div>
+        <div class="level-grid" id="level-grid"></div>
+        <div class="row">
+          <button id="btn-howto" class="mini">❓ راهنما</button>
+          <button id="btn-sound" class="mini">🔊 صدا</button>
+        </div>
+        <button id="btn-reset" class="mini danger">🧹 پاک‌کردن پیشرفت</button>
+        <p class="hint">با کلیدهای جهت‌دار یا لمس صفحه بازی کن. روی موبایل دکمه‌ها را پایین صفحه می‌بینی.</p>
+      </div>
+    </section>
+
+    <!-- ============ صفحهٔ بازی ============ -->
+    <section id="screen-game" class="screen hidden">
+      <div class="stage">
+        <canvas id="game"></canvas>
+
+        <!-- نوار اطلاعات بالا -->
+        <div class="hud">
+          <div class="hud-side">
+            <button id="btn-pause" class="icon" title="توقف">⏸️</button>
+            <span class="lvl" id="hud-level">مرحلهٔ ۱</span>
+          </div>
+          <div class="hud-mid">
+            <div class="bar"><i id="time-fill"></i></div>
+            <span class="time" id="hud-time">۶۰</span>
+          </div>
+          <div class="hud-side end">
+            <span class="coins" id="hud-coins">🪙 ۰</span>
+            <span class="hearts" id="hud-hearts">❤️❤️❤️</span>
+          </div>
+        </div>
+
+        <!-- دکمه‌های لمسی -->
+        <div class="touch">
+          <div class="touch-left">
+            <button class="tbtn" id="btn-left" aria-label="چپ">◀</button>
+            <button class="tbtn" id="btn-right" aria-label="راست">▶</button>
+          </div>
+          <button class="tbtn big" id="btn-jump" aria-label="پرش">⤴ پرش</button>
+        </div>
+
+        <!-- روپوش‌ها -->
+        <div class="overlay hidden" id="ov-pause">
+          <h2>توقف</h2>
+          <p>هر وقت خواستی برگرد.</p>
+          <button id="btn-resume" class="cta">ادامهٔ بازی</button>
+          <button id="btn-restart" class="cta ghost">شروع دوبارهٔ مرحله</button>
+          <button id="btn-levels" class="mini">بازگشت به فهرست مرحله‌ها</button>
+        </div>
+
+        <div class="overlay hidden" id="ov-clear">
+          <h2>دروازه باز شد! 🎉</h2>
+          <div class="stars" id="clear-stars">⭐</div>
+          <p id="clear-stats"></p>
+          <button id="btn-next" class="cta">مرحلهٔ بعد</button>
+          <button id="btn-again" class="cta ghost">دوباره بازی‌کردن</button>
+          <button id="btn-levels2" class="mini">فهرست مرحله‌ها</button>
+        </div>
+
+        <div class="overlay hidden" id="ov-over">
+          <h2>جان‌هایت تمام شد</h2>
+          <p id="over-stats"></p>
+          <button id="btn-retry" class="cta">تلاش دوباره</button>
+          <button id="btn-levels3" class="mini">فهرست مرحله‌ها</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ صفحهٔ پایان همهٔ مرحله‌ها ============ -->
+    <section id="screen-win" class="screen hidden">
+      <div class="card">
+        <div class="crown" aria-hidden="true">🏰</div>
+        <h2>برج سرخ فتح شد!</h2>
+        <p id="win-stats"></p>
+        <p class="hint">ستاره‌ها را برای هر مرحله بیشتر کن: سریع دویدن و همهٔ سکه‌ها.</p>
+        <button id="btn-levels4" class="cta">بازگشت به فهرست مرحله‌ها</button>
+      </div>
+    </section>
+
+    <!-- ============ راهنما ============ -->
+    <section id="screen-howto" class="screen hidden">
+      <div class="card">
+        <h2>چطور بازی کنیم؟</h2>
+        <ul class="howto">
+          <li><b>🏃 دویدن:</b> کلید → و ← یا دکمه‌های لمسی پایین صفحه.</li>
+          <li><b>⤴ پرش:</b> کلید Space/↑ یا دکمهٔ «پرش». روی دشمن بپر تا از پا بیفتد.</li>
+          <li><b>🪙 سکه:</b> همهٔ سکه‌های مرحله را بگیر تا ستارهٔ بیشتری بگیری.</li>
+          <li><b>⚡ پرش دوگانه:</b> نشانِ آبی <b>*</b> در مرحلهٔ چهارم و پنجم پرش دوم را باز می‌کند.</li>
+          <li><b>🟪 سکوی متحرک:</b> رویش بایست تا تو را از روی گودال ببرد.</li>
+          <li><b>^ خار:</b> به خار نزدیک نشو؛ یک جان کم می‌کند.</li>
+          <li><b>⏱️ زمان:</b> هر مرحله زمان دارد؛ سریع‌تر برسی، ستارهٔ بیشتری می‌گیری.</li>
+        </ul>
+        <button id="btn-back-title" class="cta">فهمیدم</button>
+      </div>
+    </section>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

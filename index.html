@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Supermarket" />
-  <meta name="description" content="سوپرمارکت من — بازی سه‌بعدی مدیریت سوپرمارکت برای موبایل: خرید جنس، قیمت‌گذاری، مشتری‌ها و سود روزانه" />
+  <meta name="description" content="سوپرمارکت من — بازی سه‌بعدی مدیریت سوپرمارکت برای موبایل: خرید جنس، قیمت‌گذاری، مشتری‌های واقعی با دست و سبد خرید، هوا، رویدادها و سود روزانه" />
   <title>سوپرمارکت من | بازی مدیریت سوپرمارکت</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🛒</text></svg>" />
   <link rel="apple-touch-icon" href="./icons/icon-192.png" />
@@ -38,15 +38,21 @@
       <h1>سوپرمارکت من</h1>
       <p class="start-sub">بازی سه‌بعدی مدیریت سوپرمارکت ۲۰ متری</p>
       <ul class="start-steps">
-        <li>📊 هر روز قیمت بازار به‌صورت تصادفی تغییر می‌کند</li>
-        <li>🛒 از تأمین‌کننده جنس بخر و روی قفسه‌ها چیده شود</li>
+        <li>📊 هر روز قیمت بازار و <b>حال‌وهوای محله</b> عوض می‌شود</li>
+        <li>🛒 از تأمین‌کننده جنس بخر تا روی قفسه چیده شود</li>
         <li>🏷️ قیمت فروش را خودت تعیین کن — نه‌بالا، نه‌پایین!</li>
-        <li>🚶 مشتری‌ها وارد می‌شوند، خرید می‌کنند، می‌روند</li>
-        <li>💰 پایان روز: سود و زیان را ببین و ادامه بده</li>
+        <li>🚶 مشتری‌ها با <b>دست و سبد خرید</b> واقعی می‌آیند، برمی‌دارند و می‌روند</li>
+        <li>🌦️ هوا و رویدادهای محله روی تعداد مشتری اثر دارد</li>
+        <li>💰 پایان روز: سود، زیان، مأموریت و سطح را ببین</li>
       </ul>
       <button id="btn-new-game" class="cta">شروع بازی — ۱۰۰ دلار 🚀</button>
       <button id="btn-continue" class="cta ghost hidden">ادامهٔ بازی</button>
       <button id="btn-restart" class="mini hidden">شروع از نو (پاک کردن پیشرفت)</button>
+      <div class="start-others">
+        <span>🎲 بازی‌های دیگر:</span>
+        <a href="games/obsidian/index.html">🪨 ابسیدین — داستان سنگ سیاه</a>
+        <a href="games/borj/index.html">🏃 دویدن تا برج — پلتفرمر</a>
+      </div>
     </div>
     <p class="start-hint">📱 یک انگشت: چرخش دوربین · دو انگشت: زوم</p>
   </div>
@@ -55,21 +61,43 @@
   <div id="hud" class="hidden">
     <div class="hud-top">
       <div class="hud-pill" id="hud-day">روز ۱</div>
+      <div class="hud-pill hud-weather" id="hud-weather">☀️ ۹:۰۰</div>
+      <div class="hud-pill hud-level" id="hud-level">⭐ سطح ۱</div>
       <div class="hud-pill hud-money" id="hud-money"><span id="money-val">۰ $</span></div>
+      <button id="btn-sound" class="icon-btn" title="صدا">🔊</button>
       <button id="btn-reset-view" class="icon-btn" title="بازنشانی دوربین">🎥</button>
     </div>
 
     <div id="toast-wrap"></div>
 
+    <div class="hud-sub">
+      <div id="hud-news" class="news-flash hidden"></div>
+      <button id="hud-quest" class="quest-chip hidden"></button>
+    </div>
+
     <div id="day-progress" class="hidden">
       <div id="progress-label" class="progress-label"></div>
       <div class="progress-track"><div id="progress-fill"></div></div>
+      <div id="hud-live" class="hud-live"></div>
     </div>
 
     <div class="hud-bottom">
       <button class="bottom-btn" id="btn-supplier"><span class="b-emoji">🛒</span><span>تأمین‌کننده</span></button>
+      <button class="bottom-btn" id="btn-info"><span class="b-emoji">⭐</span><span>فروشگاه</span></button>
       <button class="bottom-btn" id="btn-pricing"><span class="b-emoji">🏷️</span><span>قیمت‌گذاری</span></button>
       <button class="bottom-btn primary" id="btn-start-day"><span class="b-emoji">▶️</span><span>شروع روز</span></button>
+    </div>
+  </div>
+
+  <!-- ===== کارت شروع روز (داستان روز) ===== -->
+  <div id="day-intro" class="hidden">
+    <div class="intro-card">
+      <div class="intro-day" id="intro-day">📅 روز ۱</div>
+      <div class="intro-weather" id="intro-weather">☀️ آفتابی</div>
+      <div class="intro-note" id="intro-note"></div>
+      <div class="intro-event hidden" id="intro-event"></div>
+      <div class="intro-quest hidden" id="intro-quest"></div>
+      <button class="cta small ghost" id="intro-close">بزن بریم 🚀</button>
     </div>
   </div>
 
@@ -97,6 +125,17 @@
       <button class="sheet-close">✕</button>
     </header>
     <div class="sheet-body" id="pricing-rows"></div>
+  </section>
+
+  <section class="sheet" id="sheet-info">
+    <header class="sheet-head">
+      <div>
+        <div class="sheet-title">⭐ فروشگاه من</div>
+        <div class="sheet-sub">سطح، تجربه، مأموریت امروز و کارنامهٔ روزها</div>
+      </div>
+      <button class="sheet-close">✕</button>
+    </header>
+    <div class="sheet-body" id="info-body"></div>
   </section>
 
   <section class="sheet" id="sheet-report">

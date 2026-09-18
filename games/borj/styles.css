@@ -1,0 +1,394 @@
+/* =============================================================
+   styles.css — ظاهر بازی «دویدن تا برج»
+   فارسی، راست‌به‌چپ، موبایل‌اول. بدون فونت یا فایل بیرونی.
+   ============================================================= */
+:root {
+  --bg: #0e1220;
+  --bg2: #1a2138;
+  --ink: #eef2ff;
+  --dim: #a9b3d0;
+  --gold: #ffcf5c;
+  --green: #4fd18b;
+  --red: #ff6b6b;
+  --line: rgba(255, 255, 255, 0.12);
+  --r: 16px;
+}
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: radial-gradient(120% 80% at 50% 0%, #1b2340 0%, var(--bg) 60%);
+  color: var(--ink);
+  font-family: Tahoma, 'Segoe UI', system-ui, sans-serif;
+  overscroll-behavior: none;
+}
+body {
+  display: flex;
+  flex-direction: column;
+}
+.hidden {
+  display: none !important;
+}
+.screen {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  min-height: 100%;
+}
+#screen-game {
+  padding: 0;
+  align-items: stretch;
+}
+.title-wrap,
+.card {
+  width: 100%;
+  max-width: 560px;
+  background: linear-gradient(180deg, rgba(40, 50, 84, 0.92), rgba(20, 26, 46, 0.95));
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  padding: 20px 18px 18px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+h1 {
+  margin: 6px 0 4px;
+  font-size: clamp(26px, 7vw, 38px);
+  letter-spacing: 0.5px;
+}
+h2 {
+  margin: 4px 0 10px;
+  font-size: clamp(20px, 5.4vw, 26px);
+}
+.sub {
+  margin: 0 0 12px;
+  color: var(--dim);
+  font-size: 14px;
+  line-height: 1.9;
+}
+.hint {
+  color: var(--dim);
+  font-size: 12.5px;
+  line-height: 1.9;
+  margin-top: 12px;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 10px 0 4px;
+}
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+.cta {
+  display: block;
+  width: 100%;
+  margin: 8px 0;
+  padding: 14px 16px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #10233a;
+  background: linear-gradient(180deg, #ffe08a, var(--gold));
+  border: none;
+  border-radius: 14px;
+  box-shadow: 0 6px 0 #b98d19, 0 12px 24px rgba(0, 0, 0, 0.35);
+}
+.cta:active {
+  transform: translateY(2px);
+  box-shadow: 0 4px 0 #b98d19;
+}
+.cta.ghost {
+  background: linear-gradient(180deg, #46507a, #333b60);
+  color: var(--ink);
+  box-shadow: 0 5px 0 #232a49;
+}
+.mini {
+  padding: 9px 14px;
+  font-size: 13px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.mini.danger {
+  color: var(--red);
+  border-color: rgba(255, 107, 107, 0.4);
+}
+.stars-total {
+  margin: 4px 0 12px;
+  font-size: 13.5px;
+  color: var(--gold);
+}
+/* ---------------- هنرِ صفحهٔ آغاز ---------------- */
+.hero-art {
+  position: relative;
+  height: 92px;
+  margin-bottom: 2px;
+}
+.tower {
+  position: absolute;
+  inset-inline-end: 24%;
+  bottom: 0;
+  width: 54px;
+  height: 88px;
+  background: linear-gradient(180deg, #a4444a, #6d2a30);
+  border-radius: 6px 6px 0 0;
+  box-shadow: inset -8px 0 rgba(0, 0, 0, 0.2);
+}
+.tower::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -8px;
+  top: -14px;
+  width: 70px;
+  height: 16px;
+  background: #8a353c;
+  clip-path: polygon(0 100%, 10% 0, 25% 100%, 35% 0, 50% 100%, 65% 0, 78% 100%, 90% 0, 100% 100%);
+}
+.runner {
+  position: absolute;
+  inset-inline-start: 18%;
+  bottom: 0;
+  width: 34px;
+  height: 44px;
+  border-radius: 12px 12px 6px 6px;
+  background: #2f7d5d;
+  box-shadow: 0 -10px 0 -2px #f0c69c, 0 0 0 0 #000;
+}
+/* ---------------- فهرست مرحله‌ها ---------------- */
+.level-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+.lvl-card {
+  position: relative;
+  padding: 12px 8px 10px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(90, 106, 168, 0.35), rgba(40, 50, 84, 0.6));
+  color: var(--ink);
+  text-align: center;
+}
+.lvl-card:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.lvl-card .n {
+  font-size: 22px;
+  font-weight: 800;
+}
+.lvl-card .nm {
+  display: block;
+  font-size: 12.5px;
+  color: var(--dim);
+  margin-top: 2px;
+  min-height: 18px;
+}
+.lvl-card .st {
+  display: block;
+  font-size: 12px;
+  margin-top: 6px;
+  color: var(--gold);
+  letter-spacing: 2px;
+}
+.lvl-card .lock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+}
+/* ---------------- صفحهٔ بازی ---------------- */
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0b0f1c;
+  overflow: hidden;
+}
+canvas#game {
+  display: block;
+  touch-action: none;
+  image-rendering: auto;
+}
+.hud {
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px calc(8px + env(safe-area-inset-top, 0px));
+  background: linear-gradient(180deg, rgba(6, 9, 18, 0.72), rgba(6, 9, 18, 0));
+  pointer-events: none;
+}
+.hud > * {
+  pointer-events: auto;
+}
+.hud-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.hud-side.end {
+  margin-inline-start: auto;
+}
+.hud .icon {
+  width: 36px;
+  height: 36px;
+  font-size: 17px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(10, 14, 26, 0.7);
+  color: var(--ink);
+}
+.hud .lvl {
+  font-size: 13px;
+  font-weight: 700;
+  text-shadow: 0 2px 4px #000;
+}
+.hud-mid {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  margin-inline: 6px;
+}
+.bar {
+  flex: 1;
+  height: 9px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.bar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, var(--green), #f5e05a 65%, var(--red));
+  transform-origin: right center;
+  transition: width 0.12s linear;
+}
+.hud .time {
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 26px;
+  text-align: center;
+  text-shadow: 0 2px 4px #000;
+}
+.hud .coins,
+.hud .hearts {
+  font-size: 13px;
+  text-shadow: 0 2px 4px #000;
+  white-space: nowrap;
+}
+/* ---------------- دکمه‌های لمسی ---------------- */
+.touch {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+.touch-left {
+  display: flex;
+  gap: 10px;
+}
+.tbtn {
+  pointer-events: auto;
+  width: 68px;
+  height: 68px;
+  font-size: 24px;
+  color: #fff;
+  background: rgba(20, 26, 46, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 50%;
+  backdrop-filter: blur(3px);
+  user-select: none;
+}
+.tbtn.big {
+  width: auto;
+  min-width: 108px;
+  height: 68px;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 700;
+  padding: 0 20px;
+  background: rgba(79, 209, 139, 0.28);
+  border-color: rgba(79, 209, 139, 0.5);
+}
+.tbtn.on {
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(0.95);
+}
+/* ---------------- روپوش‌ها ---------------- */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 24px;
+  text-align: center;
+  background: rgba(6, 9, 18, 0.82);
+  backdrop-filter: blur(4px);
+  z-index: 5;
+}
+.overlay .cta,
+.overlay .mini {
+  max-width: 320px;
+  width: 100%;
+}
+.overlay p {
+  color: var(--dim);
+  font-size: 14px;
+  line-height: 2;
+  margin: 2px 0 8px;
+}
+.stars {
+  font-size: 30px;
+  letter-spacing: 6px;
+  color: var(--gold);
+  min-height: 40px;
+}
+.crown {
+  font-size: 52px;
+}
+.howto {
+  text-align: start;
+  color: var(--dim);
+  font-size: 14px;
+  line-height: 2.1;
+  padding-inline-start: 18px;
+  margin: 4px 0 14px;
+}
+.howto b {
+  color: var(--ink);
+}
+@media (min-width: 720px) {
+  .tbtn {
+    opacity: 0.55;
+  }
+}
