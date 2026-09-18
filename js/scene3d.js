@@ -41,7 +41,8 @@ export const REGISTER_SPOT = new THREE.Vector3(REGISTER.pay.x, 0, REGISTER.pay.z
 const HAS_DOM = typeof document !== 'undefined' && !!document.createElement;
 
 const ITEM_X = [-0.32, -0.11, 0.11, 0.32];
-const ITEM_Y = [0.36, 0.82, 1.28];
+// ارتفاع کالاها: دقیقاً ۲.۵ میلی‌متر بالای سطح هر طبقه (نه معلق در هوا!)
+const ITEM_Y = [0.34, 0.8, 1.26];
 
 // ---------- کمکی‌های هندسه و جنس ----------
 const matCache = new Map();
@@ -143,6 +144,30 @@ function wallTexture() {
   );
 }
 
+function ceilingTexture() {
+  return canvasTex(
+    256,
+    256,
+    (x) => {
+      x.fillStyle = '#f4f7f9';
+      x.fillRect(0, 0, 256, 256);
+      x.strokeStyle = 'rgba(176,188,198,0.55)';
+      x.lineWidth = 3;
+      for (let i = 0; i <= 2; i++) {
+        x.beginPath();
+        x.moveTo(i * 128, 0);
+        x.lineTo(i * 128, 256);
+        x.stroke();
+        x.beginPath();
+        x.moveTo(0, i * 128);
+        x.lineTo(256, i * 128);
+        x.stroke();
+      }
+    },
+    { repeat: [2, 1.6] }
+  );
+}
+
 function grassTexture() {
   return canvasTex(
     256,
@@ -192,9 +217,6 @@ function buildRoom(world) {
   s.add(floor);
 
   // ---- نورهای سقفی ----
-  // ⚠️ عمداً «سقفِ صفحه‌ای» نمی‌گذاریم: دوربین از بالای دیوار به داخل
-  //    نگاه می‌کند و یک صفحهٔ سقف کل فروشگاه را می‌پوشاند.
-  //    فقط پانل‌های نور و تیرها می‌مانند.
   for (const [lx, lz] of [
     [-1.2, -0.9],
     [1.2, -0.9],
@@ -206,6 +228,22 @@ function buildRoom(world) {
     s.add(panel);
   }
   for (const bz of [-1.2, 0.4]) s.add(box(w, 0.12, 0.1, mat(0xd8dee4), 0, h - 0.08, bz));
+
+  // ---- سقف ----
+  // بازی اول‌شخص شده و بازیکن می‌تواند سرش را بالا بگیرد؛ پس سقف واقعی لازم
+  // است (قبلاً دوربین از بالا نگاه می‌کرد و سقف دیده نمی‌شد). عمداً ۲ سانتی‌متر
+  // بالای تاج دیوار قرار می‌گیرد که با سطح بالای دیوارها z-fighting نکند.
+  // castShadow خاموش است تا نور آفتابِ بیرونی همچنان فروشگاه را روشن کند.
+  const ceilTex = ceilingTexture();
+  const ceil = new THREE.Mesh(
+    new THREE.PlaneGeometry(w + 0.34, d + 0.34),
+    new THREE.MeshStandardMaterial(ceilTex ? { map: ceilTex, roughness: 0.9 } : { color: 0xf4f7f9, roughness: 0.9 })
+  );
+  ceil.rotation.x = Math.PI / 2; // رو به پایین
+  ceil.position.set(0, h + 0.02, 0);
+  ceil.receiveShadow = true;
+  ceil.castShadow = false;
+  s.add(ceil);
 
   // ---- دیوارها ----
   const wallTex = wallTexture();
@@ -224,17 +262,9 @@ function buildRoom(world) {
   s.add(box(0.16, 0.09, d, baseboard, -halfW - 0.06, 0.045, 0));
   s.add(box(0.16, 0.09, d, baseboard, halfW + 0.06, 0.045, 0));
 
-  // ---- دیوار جلو: دو تکه + پنجره + لابی در ----
-  const doorL = DOOR.x - DOOR.w / 2;
-  const doorR = DOOR.x + DOOR.w / 2;
-  const segL = doorL + halfW; // عرض تکهٔ چپ
-  const segR = halfW - doorR;
-  s.add(box(segL, h, 0.14, wallMat, -halfW + segL / 2, h / 2, halfD + 0.07));
-  s.add(box(segR, h, 0.14, wallMat, doorR + segR / 2, h / 2, halfD + 0.07));
-  s.add(box(segL, 0.09, 0.16, baseboard, -halfW + segL / 2, 0.045, halfD + 0.06));
-  s.add(box(segR, 0.09, 0.16, baseboard, doorR + segR / 2, 0.045, halfD + 0.06));
-
-  // پنجرهٔ شیشه‌ای روی دیوار جلو (دو طرف در)
+  // ---- شیشهٔ ویترین‌ها و در ----
+  // depthWrite خاموش: وقتی از داخل ویترین به بیرون (یا برعکس) نگاه می‌کنی،
+  // شیشهٔ نیمه‌شفاف با آنچه پشتش است دچار درگیریِ مرتب‌سازی نمی‌شود.
   const glassMat = new THREE.MeshStandardMaterial({
     color: 0xcfe8ff,
     transparent: true,
@@ -242,16 +272,49 @@ function buildRoom(world) {
     roughness: 0.05,
     metalness: 0.1,
     side: THREE.DoubleSide,
+    depthWrite: false,
   });
-  for (const [cx, cw] of [
-    [-halfW + segL / 2, Math.max(0.5, segL - 0.3)],
-    [doorR + segR / 2, Math.max(0.3, segR - 0.3)],
-  ]) {
-    const win = box(cw, 1.25, 0.04, glassMat, cx, 1.55, halfD + 0.03);
-    win.castShadow = false;
-    s.add(win);
-    s.add(box(cw + 0.08, 0.06, 0.08, mat(0xf4f7fa), cx, 2.2, halfD + 0.03));
-  }
+
+  // ---- دیوار جلو: با ویترین‌های «واقعی» (سوراخ‌دار) ----
+  // قبلاً شیشهٔ پنجره داخل دیوار توپر فرو می‌رفت و از داخل فروشگاه فقط
+  // دیوار دیده می‌شد. حالا هر تکه از دیوار جلو یک دهانهٔ واقعی دارد که
+  // داخلش شیشه نشسته — در نمای اول‌شخص خیابان و ویرانهٔ بیرون پیداست.
+  const doorL = DOOR.x - DOOR.w / 2;
+  const doorR = DOOR.x + DOOR.w / 2;
+  const trimMat = mat(0xf4f7fa);
+  const frontSeg = (x0, x1) => {
+    const w = x1 - x0;
+    if (w <= 0.02) return;
+    const cx = (x0 + x1) / 2;
+    const z = halfD + 0.07; // وسط ضخامت دیوار جلو
+    const sill = 0.95; // ارتفاع لبهٔ پایین پنجره
+    const head = 2.2; // ارتفاع لبهٔ بالای پنجره
+    const gh = head - sill;
+    // نوار زیر پنجره + نوار بالای پنجره
+    s.add(box(w, sill, 0.14, wallMat, cx, sill / 2, z));
+    s.add(box(w, h - head, 0.14, wallMat, cx, (h + head) / 2, z));
+    // دو ستون کناری دهانه
+    const jamb = Math.min(0.16, w * 0.22);
+    s.add(box(jamb, gh, 0.14, wallMat, x0 + jamb / 2, sill + gh / 2, z));
+    s.add(box(jamb, gh, 0.14, wallMat, x1 - jamb / 2, sill + gh / 2, z));
+    // شیشه داخل دهانه (تک‌صفحه — نه جعبه، پس با دیوار برخورد هم‌سطحی ندارد)
+    const gw = Math.max(0.1, w - jamb * 2);
+    const glass = new THREE.Mesh(new THREE.PlaneGeometry(gw, gh), glassMat);
+    glass.position.set(cx, sill + gh / 2, halfD + 0.06);
+    glass.castShadow = false;
+    s.add(glass);
+    // میلهٔ وسط ویترین‌های پهن
+    if (gw > 1.1) s.add(box(0.05, gh, 0.1, trimMat, cx, sill + gh / 2, halfD + 0.06));
+    // چارچوب بالا/پایین (کمی از دیوار بیرون‌تر تا هیچ سطحی هم‌پوشانی نکند)
+    s.add(box(gw + 0.14, 0.06, 0.2, trimMat, cx, sill - 0.01, z));
+    s.add(box(gw + 0.14, 0.07, 0.18, trimMat, cx, head + 0.025, z));
+    // قرنیز
+    s.add(box(w, 0.09, 0.16, baseboard, cx, 0.045, halfD + 0.06));
+  };
+  frontSeg(-halfW, doorL);
+  frontSeg(doorR, halfW);
+  // سردر بالای لابی در (قبلاً این سوراخ باز بود و از نمای اول‌شخص هوا دیده می‌شد!)
+  s.add(box(DOOR.w + 0.2, h - DOOR.h, 0.14, wallMat, DOOR.x, (h + DOOR.h) / 2, halfD + 0.07));
 
   // ---- چارچوب در + در کشویی شیشه‌ای ----
   const frameMat = mat(0x6b7683, { metalness: 0.45, roughness: 0.4 });
@@ -290,24 +353,25 @@ function buildRoom(world) {
 function buildSign(world) {
   const s = world.scene;
   const halfD = ROOM.d / 2;
-  const tex = canvasTex(1024, 200, (x) => {
-    const grad = x.createLinearGradient(0, 0, 0, 200);
+  const tex = canvasTex(1024, 170, (x) => {
+    const grad = x.createLinearGradient(0, 0, 0, 170);
     grad.addColorStop(0, '#127d4a');
     grad.addColorStop(1, '#0a4a2a');
     x.fillStyle = grad;
-    x.fillRect(0, 0, 1024, 200);
+    x.fillRect(0, 0, 1024, 170);
     x.fillStyle = '#ffffff';
-    x.font = '900 104px Vazirmatn, Tahoma, sans-serif';
+    x.font = '900 88px Vazirmatn, Tahoma, sans-serif';
     x.textAlign = 'center';
     x.textBaseline = 'middle';
-    x.fillText('🛒 سوپرمارکت من', 512, 106);
+    x.fillText('🛒 سوپرمارکت من', 512, 89);
   });
-  const board = box(2.6, 0.6, 0.09, mat(0x0b3d22), DOOR.x, 2.62, halfD + 0.1);
+  // تابلو روی سردرِ بالای در — کاملاً داخل باندِ دیوار، از سقف بالاتر نمی‌زند
+  const board = box(2.6, 0.5, 0.09, mat(0x0b3d22), DOOR.x, 2.52, halfD + 0.1);
   const face = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.52, 0.52),
+    new THREE.PlaneGeometry(2.52, 0.42),
     new THREE.MeshBasicMaterial({ map: tex, toneMapped: false })
   );
-  face.position.set(DOOR.x, 2.62, halfD + 0.152);
+  face.position.set(DOOR.x, 2.52, halfD + 0.152);
   s.add(board, face);
   world.signFace = face;
 
@@ -325,7 +389,9 @@ function buildSign(world) {
     new THREE.PlaneGeometry(0.42, 0.21),
     new THREE.MeshBasicMaterial({ map: openTex, toneMapped: false, transparent: true })
   );
-  openMesh.position.set(DOOR.x + 0.62, 1.72, halfD + 0.16);
+  // تابلوی «باز/بسته» روی دیوارِ کنار در (۸ میلی‌متر جلوی صفهٔ دیوار تا
+  // در عمق میدان با هم در نیفتد — نه داخل بدنهٔ دیوار!)
+  openMesh.position.set(DOOR.x + 0.62, 1.72, halfD + 0.148);
   s.add(openMesh);
   world.drawOpenSign = (isOpen) => {
     const x = openCanvas.getContext('2d');
@@ -394,7 +460,9 @@ function buildOil() {
   );
   body.position.y = 0.105;
   body.castShadow = true;
-  const label = new THREE.Mesh(new THREE.CylinderGeometry(0.053, 0.053, 0.09, 14), mat(0xf6f1e7));
+  // لیبل بطری: قبلاً فقط ۰.۵ میلی‌متر از بدنه فاصله داشت → z-fighting؛
+  // حالا ۲.۵ میلی‌متر بیرون‌تر از بدنه است.
+  const label = new THREE.Mesh(new THREE.CylinderGeometry(0.0575, 0.0575, 0.088, 14), mat(0xf6f1e7));
   label.position.y = 0.1;
   const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.05, 8), mat(0x2b5d3a));
   cap.position.y = 0.23;
@@ -404,7 +472,8 @@ function buildOil() {
 function buildRice() {
   const g = new THREE.Group();
   const bag = box(0.15, 0.21, 0.1, mat(0xf3ead7, { roughness: 0.85 }), 0, 0.105, 0);
-  const stripe = box(0.154, 0.055, 0.104, mat(0x2f7d4f), 0, 0.105, 0);
+  // نوار سبز: فاصلهٔ واضح از بدنهٔ پاکت (نه ۲ میلی‌متر که در عمق درهم برود)
+  const stripe = box(0.158, 0.055, 0.108, mat(0x2f7d4f), 0, 0.105, 0);
   const top = box(0.11, 0.03, 0.08, mat(0xe4d8bd), 0, 0.225, 0);
   g.add(bag, stripe, top);
   return g;
@@ -589,13 +658,23 @@ function buildRegister(world) {
   screenCanvas.height = 160;
   const screenTex = new THREE.CanvasTexture(screenCanvas);
   screenTex.colorSpace = THREE.SRGBColorSpace;
+  // ⚠️ مانیتور صندوق: قبلاً صفحهٔ نمایش «داخل» جعبهٔ صندوق فرو می‌رفت و
+  // دو سطحِ تقریباً هم‌پوشان مدام زیر هم ز-fighting می‌کردند (پرت‌پرت شدن
+  // تصویر). حالا مانیتور با پایهٔ خودش کاملاً جلوی بدنه می‌ایستد.
+  const monitor = new THREE.Group();
+  const bezel = box(0.25, 0.17, 0.02, mat(0x242b33, { roughness: 0.45 }), 0, 0, -0.011);
+  bezel.castShadow = false;
   const screen = new THREE.Mesh(
     new THREE.PlaneGeometry(0.22, 0.14),
     new THREE.MeshBasicMaterial({ map: screenTex, toneMapped: false })
   );
-  screen.position.set(c.x + 0.34, 1.13, c.z + 0.142);
-  screen.rotation.x = -0.42;
-  s.add(screen);
+  screen.position.z = 0.001;
+  monitor.add(bezel, screen);
+  monitor.position.set(c.x + 0.34, 1.16, c.z + 0.185); // جلوی بدنهٔ صندوق، بدون تماس
+  monitor.rotation.x = -0.26;
+  s.add(monitor);
+  // پایهٔ مانیتور
+  s.add(box(0.05, 0.17, 0.03, mat(0x242b33, { roughness: 0.45 }), c.x + 0.34, 0.99, c.z + 0.15));
   world.drawRegister = (lines) => {
     const x = screenCanvas.getContext('2d');
     if (!x) return;
@@ -631,11 +710,13 @@ function buildRegister(world) {
   // جای کیسه
   const stand = box(0.14, 0.5, 0.14, metal, c.x + 0.52, 0.65, c.z + 0.02);
   s.add(stand);
+  // کیسه‌های پلاستیکی داخل‌هم (لبه‌ها قبلاً فقط ۱ میلی‌متر از هم فاصله
+  // داشتند و در عمق میدان درهم می‌افتادند)
   for (let i = 0; i < 3; i++) {
     const bagMat = mat(0xefe6d2, { roughness: 0.9 });
     const b = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.22, 8, 1, true), bagMat);
-    b.position.set(c.x + 0.52, 0.72 + i * 0.001, c.z + 0.02);
-    b.scale.setScalar(1 - i * 0.08);
+    b.position.set(c.x + 0.52, 0.72 + i * 0.012, c.z + 0.02);
+    b.scale.setScalar(1 - i * 0.1);
     s.add(b);
   }
   // جداکنندهٔ کالا
@@ -708,9 +789,11 @@ function buildDecor(world) {
   // سبدهای ورودی (روی هم چیده‌شده) کنار در
   const stack = new THREE.Group();
   for (let i = 0; i < 5; i++) {
-    const b = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.028, 6, 14), mat(0xc25a34));
+    // فاصلهٔ ۶۱ میلی‌متری: حلقه‌های سبد قبلاً دقیقاً به هم «چسبیده» بودند و
+    // در نقطهٔ تماس z-fighting می‌گرفتند.
+    const b = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.026, 6, 14), mat(0xc25a34));
     b.rotation.x = Math.PI / 2;
-    b.position.y = 0.035 + i * 0.055;
+    b.position.y = 0.035 + i * 0.061;
     b.castShadow = true;
     stack.add(b);
   }
@@ -800,9 +883,10 @@ function buildOutside(world) {
   const s = world.scene;
   const halfD = ROOM.d / 2;
 
+  const gTex = grassTexture();
   const grass = new THREE.Mesh(
     new THREE.CircleGeometry(26, 44),
-    new THREE.MeshStandardMaterial(grassTexture() ? { map: grassTexture(), roughness: 1 } : { color: 0x9dbd86 })
+    new THREE.MeshStandardMaterial(gTex ? { map: gTex, roughness: 1 } : { color: 0x9dbd86 })
   );
   grass.rotation.x = -Math.PI / 2;
   grass.position.y = -0.06;
@@ -831,26 +915,35 @@ function buildOutside(world) {
   pavement.receiveShadow = true;
   s.add(pavement);
   s.add(box(9, 0.14, 0.16, mat(0xa9acac), DOOR.x, 0.06, halfD + 2.72));
-  s.add(box(9, 0.14, 0.16, mat(0xa9acac), DOOR.x, 0.06, halfD + 0.3));
+  // جدولِ سمتِ مغازه دو تکه است تا ورودیِ در باز بماند؛ قبلاً مسیرِ پیاده‌رو
+  // از دلِ جدول رد می‌شد و در نمای اول‌شخص واضحاً خراب به چشم می‌آمد.
+  const curbIn = (x0, x1) => s.add(box(x1 - x0, 0.14, 0.16, mat(0xa9acac), (x0 + x1) / 2, 0.06, halfD + 0.3));
+  curbIn(DOOR.x - 4.5, DOOR.x - 1.05);
+  curbIn(DOOR.x + 1.05, DOOR.x + 4.5);
 
   // مسیر تا لابی در
-  const path = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 2.4), mat(0xb9b2a4, { roughness: 1 }));
+  // ⚠️ نسخهٔ قبلی ۳۰ سانتی‌مترِ نوارِ مسیر «داخل» مغازه و دقیقاً هم‌سطحِ
+  //    کف بود (y=0 روی y=0) → مستطیلِ چشمک‌زنِ جلوی در. حالا مسیر از خطِ
+  //    دیوار شروع می‌شود و ۸ میلی‌متر بالای پیاده‌رو است.
+  const path = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 2.2), mat(0xb9b2a4, { roughness: 1 }));
   path.rotation.x = -Math.PI / 2;
-  path.position.set(DOOR.x, 0.0, halfD + 0.9);
+  path.position.set(DOOR.x, 0.008, halfD + 1.1);
   path.receiveShadow = true;
   s.add(path);
 
   // خیابان
+  const aTex = asphaltTexture();
   const street = new THREE.Mesh(
     new THREE.PlaneGeometry(24, 4),
-    new THREE.MeshStandardMaterial(asphaltTexture() ? { map: asphaltTexture(), roughness: 1 } : { color: 0x6a6f75 })
+    new THREE.MeshStandardMaterial(aTex ? { map: aTex, roughness: 1 } : { color: 0x6a6f75 })
   );
   street.rotation.x = -Math.PI / 2;
   street.position.set(0, -0.03, halfD + 4.9);
   street.receiveShadow = true;
   s.add(street);
+  // خط‌کشی خیابان: قبلاً ۲.۵ سانتی‌متر بالای آسفالت «شناور» بود
   for (let i = -5; i <= 5; i++)
-    s.add(box(1.1, 0.01, 0.12, mat(0xf0e9c0), i * 2.1, 0.0, halfD + 4.9));
+    s.add(box(1.1, 0.012, 0.12, mat(0xf0e9c0), i * 2.1, -0.024, halfD + 4.9));
 
   // درخت‌ها
   world.trees = [];
@@ -1031,7 +1124,10 @@ export function buildLights(scene) {
   cam.bottom = -8;
   cam.near = 1;
   cam.far = 30;
-  dir.shadow.bias = -0.0008;
+  // bias منفیِ بزرگِ قبلی روی کف و قفسه‌ها «آکنهٔ سایه» (راه‌راه‌های پویا)
+  // می‌ساخت. normalBias سطح را از خودِ سایه‌اش فاصله می‌دهد و تصویر ثابت می‌ماند.
+  dir.shadow.bias = -0.0003;
+  dir.shadow.normalBias = 0.03;
   scene.add(dir);
   const inner = new THREE.PointLight(0xfff2d8, 12, 9, 2);
   inner.position.set(0, 2.6, 0);

@@ -101,9 +101,11 @@ export class DaySimulation {
     );
     if (nearDoor !== this._doorOpen) {
       this._doorOpen = nearDoor;
-      this.world.setDoor(nearDoor);
       if (nearDoor) sfx.door();
     }
+    // نتیجهٔ نهاییِ «در باز بماند» با وضعیتِ بازیکن (first-person) در main.js
+    // OR می‌شود؛ این‌جا فقط آرزوی مشتری‌ها را ثبت می‌کنیم.
+    this.world.doorWanted = nearDoor;
 
     for (const c of this.active) c.update(dt);
     this.active = this.active.filter((c) => !c.gone);
@@ -129,6 +131,7 @@ export class DaySimulation {
   finishDay() {
     if (this.finished) return;
     this.finished = true;
+    if (this.world) this.world.doorWanted = false;
     const s = this.state.dayStats;
     s.customers = this.stats.customers;
     s.buyers = this.stats.buyers;
@@ -379,8 +382,11 @@ class CustomerAgent {
     dirX = dx / dist;
     dirZ = dz / dist;
 
-    // جداسازی از مشتری‌های دیگر
+    // جداسازی از مشتری‌های دیگر + از «بدنِ بازیکن» (نمای اول‌شخص):
+    // مشتری‌ها دور بازیکن می‌چرخند و از توی او رد نمی‌شوند.
     const others = this.sim.active.filter((o) => o !== this && !o.gone);
+    const po = this.sim.world && this.sim.world.playerObstacle;
+    if (po && po.active) others.push(po);
     const sep = separation(this.pos, this.radius, others, 1.05);
     let vx = dirX + sep.x * 0.8;
     let vz = dirZ + sep.z * 0.8;

@@ -14,7 +14,7 @@
 //  ➕ هنگام تغییر فایل‌های اپ، VERSION را تغییر بده تا کش‌های قدیمی
 //     پاک شوند (در activate همهٔ کش‌های versionهای قبل حذف می‌شوند).
 // =============================================================
-const VERSION = 'market-game-v5';
+const VERSION = 'market-game-v6';
 const SHELL_CACHE = `${VERSION}-shell`;
 const RUNTIME_CACHE = `${VERSION}-runtime`;
 
@@ -24,7 +24,6 @@ const APP_SHELL = [
   './manifest.webmanifest',
   './css/style.css',
   './vendor/three/build/three.module.js',
-  './vendor/three/examples/jsm/controls/OrbitControls.js',
   './js/util.js',
   './js/config.js',
   './js/economy.js',
@@ -36,6 +35,7 @@ const APP_SHELL = [
   './js/sound.js',
   './js/story.js',
   './js/scene3d.js',
+  './js/fps.js',
   './js/customers.js',
   './js/ui.js',
   './js/main.js',

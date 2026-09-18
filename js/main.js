@@ -10,7 +10,6 @@
 //       می‌یابد و پیام خطا نمایش داده می‌شود — نه یک دکمهٔ مرده.
 // =============================================================
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { PRODUCTS, GAME } from './config.js';
 import { rollMarketPrices } from './economy.js';
 import { newGameState, saveGame, loadGame, hasSave, clearSave, freshDayStats } from './state.js';
@@ -23,7 +22,9 @@ import {
   floatText,
   sparkle,
   REGISTER_POS,
+  DOOR,
 } from './scene3d.js';
+import { FirstPerson, PLAYER_RADIUS } from './fps.js';
 import { DaySimulation } from './customers.js';
 import {
   WEATHERS,
@@ -45,16 +46,14 @@ import { fa } from './util.js';
 let renderer = null;
 let scene = null;
 let camera = null;
-let controls = null;
+let fps = null; // کنترل اول‌شخص
 let world = null;
 let state = null;
 let phase = 'menu'; // menu | prep | running | report
 let sim = null;
 let story = { weather: WEATHERS.sun, event: null };
-let camIntro = null;
+let playerNearDoor = false;
 const clock = new THREE.Clock();
-const HOME_CAM = new THREE.Vector3(1.1, 3.5, 7.2);
-const HOME_TARGET = new THREE.Vector3(-0.2, 1.0, 0.2);
 
 init();
 
@@ -110,34 +109,67 @@ function initEngine() {
     scene.background = new THREE.Color(0xbfe0f2);
     scene.fog = new THREE.Fog(0xcfe8f7, 30, 60);
 
-    camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 200);
-    camera.position.copy(HOME_CAM);
-
-    controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.copy(HOME_TARGET);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.08;
-    controls.enablePan = false;
-    controls.minDistance = 3;
-    controls.maxDistance = 16;
-    controls.minPolarAngle = 0.12;
-    controls.maxPolarAngle = 1.5;
+    // دوربین اول‌شخص: میدان دید پهن، نزدیکِ نزدیک (قفسه‌ها را می‌شود بویید!)
+    // و دورِ کوتاه‌تر — با near بزرگ‌تر و far کوتاه‌تر، دقت بافر عمق چند برابر
+    // می‌شود و زد-فایتینگِ بافت‌ها از بین می‌رود.
+    camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.08, 130);
 
     buildLights(scene);
     world = createWorld(scene);
     world.setDoor(false);
+
+    // کنترل اول‌شخص: WASD/جوی‌استیک، نگاه با ماوس/لمس، کراس‌هیر و تعامل
+    fps = new FirstPerson({
+      camera,
+      canvas: renderer.domElement,
+      world,
+      isBlocked: () => !state || phase === 'menu' || ui.isBlocking(),
+      onInteract: handleInteract,
+      formatAim: aimHintText,
+    });
+    // بدنِ بازیکن برای مشتری‌ها هم وجود دارد: دورت می‌چرخند، ازت رد نمی‌شوند
+    world.playerObstacle = { pos: fps.pos, radius: PLAYER_RADIUS, active: false };
     return true;
   } catch (err) {
     // هر خطایی اینجا افتاد: رندر را خاموش کن ولی بازی را نگه دار
     renderer = null;
     scene = null;
     camera = null;
-    controls = null;
+    fps = null;
     world = createHeadlessWorld();
     console.warn('[market-game] موتور سه‌بعدی بالا نیامد — حالت بدون گرافیک فعال شد:', err);
     ui.showEngineError(err);
     return false;
   }
+}
+
+// ---------- تعامل اول‌شخص (نگاه به قفسه/صندوق + E / ضربه) ----------
+function handleInteract(aim) {
+  if (!state || !aim) return;
+  if (phase === 'running') {
+    ui.toast('🛍️ الان فروشگاه باز است — بعد از پایان روز تنظیمش می‌کنی', 'info');
+    return;
+  }
+  if (aim.type === 'shelf') {
+    ui.openPricingPanel(state);
+    ui.flashNews('🏷️ قیمت را عوض کن — مشتری‌ها می‌بینندش');
+  } else if (aim.type === 'register') {
+    showInfo();
+  }
+  sfx.click();
+}
+
+/** متن برچسب کنار کراس‌هیر بر اساس چیزی که به آن نگاه می‌کنی */
+function aimHintText(aim) {
+  if (!aim || !state) return '';
+  const key = fps && fps.touchMode ? '👆 ضربه' : 'E';
+  if (aim.type === 'shelf') {
+    const p = PRODUCTS.find((x) => x.id === aim.id);
+    if (!p) return '';
+    const stock = state.inventory[p.id] || 0;
+    return `${p.emoji} ${p.name} · ${fa(state.salePrice[p.id])} $ · موجودی ${fa(stock)} — ${key}: قیمت‌گذاری`;
+  }
+  return `🧾 صندوق — ${key}: فروشگاه من`;
 }
 
 // ---------- PWA: ثبت Service Worker (آفلاین + نصب‌پذیری) ----------
@@ -189,6 +221,7 @@ function enterGame(msg) {
   refreshTags(world, state.salePrice, state.market);
   if (world && world.drawOpenSign) world.drawOpenSign(true);
   phase = 'prep';
+  if (world.playerObstacle) world.playerObstacle.active = true;
   cameraIntro();
   if (msg) ui.toast(msg, 'info', 3600);
   ui.flashNews(liveLine('welcome'));
@@ -407,39 +440,13 @@ function closeSheets() {
 }
 
 // ---------- دوربین ----------
+/** اینتروی سینمایی ورود: از پیاده‌رو، از درِ بازشو، تا چشمِ بازیکن */
 function cameraIntro() {
-  if (!camera || !controls) return;
-  camIntro = {
-    t: 0,
-    dur: 2.4,
-    from: new THREE.Vector3(4.2, 2.4, 8.6),
-    look0: new THREE.Vector3(1.2, 1.6, 2.2),
-  };
-  controls.enabled = false;
-}
-
-function updateCameraIntro(dt) {
-  if (!camIntro || !camera) return;
-  camIntro.t += dt;
-  const k = Math.min(1, camIntro.t / camIntro.dur);
-  const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
-  camera.position.lerpVectors(camIntro.from, HOME_CAM, e);
-  const look = new THREE.Vector3().lerpVectors(camIntro.look0, HOME_TARGET, e);
-  camera.lookAt(look);
-  if (k >= 1) {
-    camIntro = null;
-    if (controls) {
-      controls.target.copy(HOME_TARGET);
-      controls.enabled = true;
-      controls.update();
-    }
-  }
+  if (fps) fps.playIntro();
 }
 
 function resetView() {
-  if (camera && controls) {
-    cameraIntro();
-  }
+  if (fps && fps.mode !== 'intro') fps.resetToSpawn();
   sfx.click();
 }
 
@@ -447,8 +454,24 @@ function resetView() {
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(0.05, clock.getDelta());
-  if (camIntro) updateCameraIntro(dt);
-  else if (controls) controls.update();
+  const blocked = !state || phase === 'menu' || ui.isBlocking();
+  if (fps) fps.update(dt, blocked);
+
+  // درِ شیشه‌ای: برای مشتری‌ها (سیمولیشن) و برای خودِ بازیکن باز می‌شود
+  if (world && !world.headless && world.setDoor) {
+    let near = false;
+    if (fps && fps.mode === 'play' && state && !blocked) {
+      // آستانهٔ z کوچک‌تر از مشتری‌هاست تا نقطهٔ شروعِ بازیکن (۱.۲ متریِ در)
+      // ناخواسته در را باز نگه ندارد.
+      near = Math.abs(fps.pos.x - DOOR.x) < 1.3 && Math.abs(fps.pos.z - 2.15) < 1.12;
+    }
+    if (near !== playerNearDoor) {
+      playerNearDoor = near;
+      if (near && state) sfx.door();
+    }
+    if (!fps || fps.mode !== 'intro') world.setDoor(!!(world.doorWanted || playerNearDoor));
+  }
+
   if (world) world.update(dt);
   if (sim) {
     sim.update(dt);
