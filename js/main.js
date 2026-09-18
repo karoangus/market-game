@@ -42,7 +42,7 @@ import {
 import * as ui from './ui.js';
 import { sfx } from './sound.js';
 import { fa } from './util.js';
-import { toggleFullscreen } from './fullscreen.js';
+import { toggleFullscreenAsync, onFullscreenChange, isFullscreen, tryLockPortrait } from './fullscreen.js';
 
 let renderer = null;
 let scene = null;
@@ -77,6 +77,24 @@ function init() {
   });
   ui.showContinue(hasSave());
   window.addEventListener('resize', onResize);
+  // چرخش گوشی و تغییر orientation
+  window.addEventListener('orientationchange', () => {
+    // تاخیر کوتاه تا ابعاد جدید اعمال شود
+    setTimeout(onResize, 120);
+    setTimeout(onResize, 500);
+  });
+  // Screen Orientation API تغییر جهت
+  if (typeof screen !== 'undefined' && screen.orientation && screen.orientation.addEventListener) {
+    screen.orientation.addEventListener('change', () => setTimeout(onResize, 150));
+  }
+  // تمام‌صفحه تغییر کرد → رندر و FOV را به‌روز کن
+  onFullscreenChange(() => {
+    setTimeout(() => {
+      onResize();
+      // روی موبایل بعد از fullscreen، آدرس‌بار مخفی می‌شود و vh عوض می‌شود
+      setTimeout(onResize, 200);
+    }, 80);
+  });
 
   // ۲) موتور سه‌بعدی (اختیاری — خطایش بازی را متوقف نمی‌کند)
   initEngine();
@@ -86,22 +104,47 @@ function init() {
 
   // نشانهٔ «بازی بالا آمد» برای watchdog در index.html
   window.__MG_READY__ = true;
+
+  // اگر صفحه از اول عمودی است، سعی کن portrait را به عنوان پیش‌فرض نگه داری
+  // (فقط وقتی کاربر قبلاً تمام‌صفحه بوده)
+  if (isFullscreen()) {
+    tryLockPortrait();
+  }
 }
 
 /**
- * تغییر حالت تمام‌صفحه. اگر مرورگر API نداشته باشد (iOS قدیم)،
- * به‌جای دکمهٔ مرده، راهنمای مفید می‌دهیم.
+ * تغییر حالت تمام‌صفحه — نسخهٔ جدید با پشتیبانی کامل موبایل.
+ * روی اندروید: واقعاً تمام‌صفحه + قفل portrait
+ * روی iOS جدید (16.4+): تمام‌صفحه
+ * روی iOS قدیم: pseudo-fullscreen (کلاس CSS + اسکرول) + قفل جهت اگر ممکن باشد
  */
-function toggleFs() {
-  const r = toggleFullscreen();
-  if (r.ok) {
-    sfx.click();
-  } else {
-    ui.toast(
-      '⛶ مرورگرت نمایش تمام‌صفحه را مستقیم نمی‌پذیرد — از دکمهٔ تمام‌صفحهٔ خودِ مرورگر استفاده کن یا بازی را نصب کن',
-      'warn',
-      4600
-    );
+async function toggleFs() {
+  try {
+    const r = await toggleFullscreenAsync();
+    if (r.ok) {
+      sfx.click();
+      // بعد از ورود موفق، یک بار دیگر سایز را به‌روز کن
+      setTimeout(onResize, 100);
+      if (r.action === 'enter') {
+        if (r.reason === 'pseudo') {
+          ui.toast('⛶ حالت تمام‌صفحهٔ شبیه‌سازی فعال شد — برای تجربهٔ بهتر بازی را نصب کن', 'info', 3500);
+        } else {
+          ui.toast('⛶ تمام‌صفحه فعال شد', 'info', 2000);
+        }
+      } else {
+        ui.toast('↩ از تمام‌صفحه خارج شدی', 'info', 1800);
+      }
+    } else {
+      // واقعاً پشتیبانی نمی‌شود
+      ui.toast(
+        '⛶ مرورگرت تمام‌صفحه را مستقیم نمی‌دهد — روی اندروید از منوی مرورگر «تمام‌صفحه» را بزن، روی آیفون بازی را به صفحهٔ اصلی اضافه کن (Share → Add to Home Screen)',
+        'warn',
+        5200
+      );
+    }
+  } catch (e) {
+    console.warn('fullscreen toggle failed', e);
+    ui.toast('⛶ خطا در تمام‌صفحه — دوباره امتحان کن', 'warn', 3000);
   }
 }
 
@@ -116,7 +159,7 @@ function initEngine() {
     const canvas = document.getElementById('scene');
     if (!canvas) throw new Error('canvas #scene پیدا نشد');
 
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.shadowMap.enabled = true;
@@ -207,9 +250,19 @@ function registerServiceWorker() {
 
 function onResize() {
   if (!renderer || !camera) return; // حالت بدون گرافیک
-  camera.aspect = window.innerWidth / window.innerHeight;
+  // روی موبایل، window.innerHeight بعد از مخفی شدن آدرس‌بار تغییر می‌کند
+  // از visualViewport اگر موجود باشد استفاده کن (دقیق‌تر)
+  let w = window.innerWidth;
+  let h = window.innerHeight;
+  try {
+    if (window.visualViewport) {
+      w = window.visualViewport.width || w;
+      h = window.visualViewport.height || h;
+    }
+  } catch (_) {}
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(w, h);
   // چرخش گوشی/بازشدن پنجره → FOV پایه به‌روز می‌شود (حالت عمودی = دید پهن‌تر)
   if (fps) fps.setAspect(camera.aspect);
 }
@@ -249,6 +302,8 @@ function enterGame(msg) {
   cameraIntro();
   if (msg) ui.toast(msg, 'info', 3600);
   ui.flashNews(liveLine('welcome'));
+  // بعد از ورود به بازی، سایز را یک بار دیگر چک کن (مخصوص موبایل)
+  setTimeout(onResize, 150);
 }
 
 function startNew() {

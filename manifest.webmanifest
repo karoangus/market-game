@@ -1,14 +1,15 @@
 {
   "name": "My Supermarket",
   "short_name": "Supermarket",
-  "description": "بازی سه‌بعدی مدیریت سوپرمارکت — خرید جنس، قیمت‌گذاری، مشتری‌ها و سود روزانه",
+  "description": "بازی سه‌بعدی مدیریت سوپرمارکت — خرید جنس، قیمت‌گذاری، مشتری‌ها و سود روزانه — تمام‌صفحه و عمودی موبایل",
   "id": "market-game",
   "lang": "fa",
   "dir": "rtl",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
+  "display_override": ["fullscreen", "standalone", "window-controls-overlay"],
   "background_color": "#0a141d",
   "theme_color": "#0a141d",
   "categories": ["games"],
@@ -31,5 +32,10 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "screenshots": [],
+  "handle_links": "preferred",
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  }
 }

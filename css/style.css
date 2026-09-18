@@ -1,5 +1,6 @@
 /* =============================================================
    سوپرمارکت من — استایل موبایل (RTL)
+   نسخهٔ ۳: فیکس تمام‌صفحه + عمودی موبایل
    ============================================================= */
 * {
   margin: 0;
@@ -7,17 +8,29 @@
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
 }
-html,
-body {
+html {
+  /* برای موبایل: استفاده از dvh/svh تا آدرس‌بار درست حساب شود */
   height: 100%;
+  height: 100dvh;
+  height: 100svh;
   overflow: hidden;
+  /* جلوگیری از اسکرول ناخواسته روی iOS */
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
 }
 body {
+  height: 100%;
+  height: 100dvh;
+  height: 100svh;
+  overflow: hidden;
   font-family: 'Vazirmatn', Tahoma, sans-serif;
   background: #0a141d;
   color: #eef3f8;
   user-select: none;
   -webkit-user-select: none;
+  overscroll-behavior: none;
+  /* برای pseudo-fullscreen */
+  position: relative;
 }
 button {
   font-family: inherit;
@@ -27,14 +40,60 @@ button {
   display: none !important;
 }
 
+/* ---------- حالت تمام‌صفحه واقعی و شبه‌تمام‌صفحه ---------- */
+:fullscreen,
+:-webkit-full-screen,
+:-moz-full-screen,
+:-ms-fullscreen {
+  width: 100% !important;
+  height: 100% !important;
+  background: #0a141d;
+}
+html:fullscreen,
+body:fullscreen,
+html:-webkit-full-screen,
+body:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+html.pseudo-fullscreen,
+body.pseudo-fullscreen {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  height: 100dvh !important;
+  height: 100svh !important;
+  overflow: hidden !important;
+  z-index: 9999;
+  background: #0a141d;
+}
+html.pseudo-fullscreen body {
+  height: 100% !important;
+  height: 100dvh !important;
+}
+
 /* ---------- صحنهٔ سه‌بعدی ---------- */
 #scene {
   position: fixed;
   inset: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
+  height: 100svh;
   display: block;
   touch-action: none; /* کنترل اول‌شخص: لمس صفحه نباید صفحه را اسکرول کند */
+  background: #0a141d;
+}
+:fullscreen #scene,
+:-webkit-full-screen #scene,
+.pseudo-fullscreen #scene {
+  width: 100vw !important;
+  width: 100dvw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  height: 100svh !important;
 }
 
 /* ---------- HUD ---------- */
@@ -43,6 +102,10 @@ button {
   inset: 0;
   pointer-events: none;
   z-index: 10;
+  /* در تمام‌صفحه هم HUD باید درست بماند */
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
 }
 .hud-top {
   position: absolute;
@@ -53,6 +116,8 @@ button {
   align-items: center;
   gap: 8px;
   padding: calc(10px + env(safe-area-inset-top)) 12px 8px;
+  /* در حالت عمودی کمی جمع‌وجورتر */
+  flex-wrap: wrap;
 }
 .hud-pill {
   pointer-events: auto;
@@ -85,6 +150,13 @@ button {
   -webkit-backdrop-filter: blur(8px);
   font-size: 16px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.icon-btn:active {
+  transform: scale(0.92);
 }
 .hud-float {
   position: absolute;
@@ -240,6 +312,7 @@ button {
   left: 0;
   z-index: 30;
   max-height: 80vh;
+  max-height: 80dvh;
   display: flex;
   flex-direction: column;
   background: #141e28;
@@ -289,6 +362,7 @@ button {
   overflow-y: auto;
   padding: 4px 14px 18px;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* ---------- ردیف محصولات ---------- */
@@ -470,7 +544,13 @@ button {
   gap: 14px;
   background: radial-gradient(120% 90% at 50% 0%, #14351f 0%, #0c1f2b 55%, #0a141d 100%);
   padding: 20px;
+  padding-top: calc(20px + env(safe-area-inset-top));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
   overflow-y: auto;
+  overscroll-behavior: contain;
+  height: 100%;
+  height: 100dvh;
+  height: 100svh;
 }
 .start-card {
   width: min(420px, 100%);
@@ -546,6 +626,7 @@ button {
   color: #5f7386;
   font-size: 12px;
   text-align: center;
+  line-height: 1.8;
 }
 
 /* ---------- ردیف دکمه‌های کوچک صفحهٔ شروع (شروع‌از‌نو + تمام‌صفحه) ---------- */
@@ -555,9 +636,19 @@ button {
   align-items: center;
   gap: 14px;
   margin-top: 4px;
+  flex-wrap: wrap;
 }
 .start-mini-row .mini {
   margin-top: 0;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.06);
+  transition: all 0.15s;
+}
+.start-mini-row .mini:active {
+  transform: scale(0.95);
 }
 
 /* ---------- دکمهٔ تمام‌صفحه: حالت فعال ---------- */
@@ -578,6 +669,8 @@ button {
   justify-content: center;
   background: rgba(5, 10, 15, 0.6);
   padding: 20px;
+  padding-top: calc(20px + env(safe-area-inset-top));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom));
 }
 .confirm-card {
   width: min(360px, 100%);
@@ -807,11 +900,15 @@ button {
   align-items: center;
   justify-content: center;
   padding: 22px;
+  padding-top: calc(22px + env(safe-area-inset-top));
+  padding-bottom: calc(22px + env(safe-area-inset-bottom));
   background: rgba(4, 9, 14, 0.45);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   opacity: 0;
   transition: opacity 0.3s;
+  height: 100%;
+  height: 100dvh;
 }
 #day-intro.show {
   opacity: 1;
@@ -829,6 +926,9 @@ button {
   transform: translateY(18px) scale(0.94);
   transition: transform 0.38s cubic-bezier(0.2, 1.3, 0.4, 1);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  max-height: 90vh;
+  max-height: 90dvh;
+  overflow-y: auto;
 }
 #day-intro.show .intro-card {
   transform: none;
@@ -1188,30 +1288,207 @@ button {
   transform: scale(1.06);
 }
 
-/* ---------- حالت عمودی (موبایل) ----------
-   در حالت عمودی ردیف بالای HUD به دو سطر می‌شود؛ نوار خبر و توست‌ها
-   باید پایین‌تر بیایند تا روی سطر دوم نیفتند. دکمه‌های پایین هم
-   روی صفحه‌های باریک کمی جمع‌وجورتر می‌شوند. */
-@media (orientation: portrait) and (max-width: 600px) {
+/* =============================================================
+   حالت عمودی (موبایل) — بهبود یافته برای تمام‌صفحه
+   ============================================================= */
+@media (orientation: portrait) {
+  html, body {
+    height: 100dvh;
+    height: 100svh;
+  }
+  #scene {
+    height: 100dvh;
+    height: 100svh;
+  }
+  .hud-top {
+    /* در عمودی، ردیف بالا ممکن است دو سطری شود */
+    gap: 5px;
+    padding: calc(8px + env(safe-area-inset-top)) 8px 6px;
+  }
+  .hud-pill {
+    font-size: 12px;
+    padding: 5px 10px;
+  }
+  .icon-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  /* توست و خبر در عمودی پایین‌تر */
   #toast-wrap {
-    top: calc(98px + env(safe-area-inset-top));
+    top: calc(88px + env(safe-area-inset-top));
   }
   .hud-sub {
-    top: calc(98px + env(safe-area-inset-top));
+    top: calc(88px + env(safe-area-inset-top));
+  }
+  .news-flash {
+    font-size: 11.5px;
+    padding: 6px 12px;
+  }
+  .quest-chip {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+  /* دکمه‌های پایین در عمودی جمع‌وجورتر */
+  .hud-bottom {
+    gap: 8px;
+    padding: 8px 10px calc(12px + env(safe-area-inset-bottom));
   }
   .bottom-btn {
-    font-size: 11.5px;
+    font-size: 11px;
+    padding: 8px 4px;
+    border-radius: 14px;
   }
   .bottom-btn .b-emoji {
-    font-size: 20px;
+    font-size: 18px;
+  }
+  /* کراس‌هیر و راهنماها در عمودی */
+  #fp-hint {
+    bottom: calc(132px + env(safe-area-inset-bottom));
+    font-size: 11px;
+    padding: 6px 12px;
+  }
+  #fp-tip {
+    bottom: calc(92px + env(safe-area-inset-bottom));
+    font-size: 10.5px;
+  }
+  #fp-act {
+    bottom: calc(148px + env(safe-area-inset-bottom));
+    width: 56px;
+    height: 56px;
+    font-size: 22px;
+  }
+  #fp-run {
+    bottom: calc(110px + env(safe-area-inset-bottom));
+    width: 58px;
+    height: 58px;
+    font-size: 24px;
+  }
+  #day-progress {
+    bottom: calc(84px + env(safe-area-inset-bottom));
   }
 }
 
+@media (orientation: portrait) and (max-width: 600px) {
+  #toast-wrap {
+    top: calc(92px + env(safe-area-inset-top));
+  }
+  .hud-sub {
+    top: calc(92px + env(safe-area-inset-top));
+  }
+  .bottom-btn {
+    font-size: 10.5px;
+  }
+  .bottom-btn .b-emoji {
+    font-size: 18px;
+  }
+}
+
+/* صفحه‌های خیلی باریک (مثلاً Galaxy Fold) */
 @media (max-width: 360px) {
   .hud-pill {
-    padding: 5px 9px;
-    font-size: 12px;
+    padding: 4px 8px;
+    font-size: 11px;
   }
+  .hud-top {
+    gap: 4px;
+  }
+  .bottom-btn {
+    font-size: 10px;
+    padding: 6px 3px;
+  }
+  .bottom-btn .b-emoji {
+    font-size: 16px;
+  }
+}
+
+/* حالت افقی موبایل (landscape) — هم باید کار کند */
+@media (orientation: landscape) and (max-height: 500px) {
+  .hud-top {
+    padding: calc(4px + env(safe-area-inset-top)) 8px 4px;
+    gap: 4px;
+  }
+  .hud-pill {
+    padding: 4px 9px;
+    font-size: 11px;
+  }
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+  #toast-wrap {
+    top: calc(42px + env(safe-area-inset-top));
+  }
+  .hud-sub {
+    top: calc(42px + env(safe-area-inset-top));
+  }
+  .hud-bottom {
+    padding: 6px 10px calc(8px + env(safe-area-inset-bottom));
+    gap: 6px;
+  }
+  .bottom-btn {
+    padding: 6px 4px;
+    font-size: 10px;
+    flex-direction: row;
+    gap: 4px;
+    justify-content: center;
+  }
+  .bottom-btn .b-emoji {
+    font-size: 16px;
+  }
+  #day-progress {
+    bottom: calc(58px + env(safe-area-inset-bottom));
+  }
+  #fp-hint {
+    bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+  #fp-tip {
+    bottom: calc(52px + env(safe-area-inset-bottom));
+  }
+  #fp-act {
+    bottom: calc(82px + env(safe-area-inset-bottom));
+    width: 52px;
+    height: 52px;
+  }
+  #fp-run {
+    bottom: calc(62px + env(safe-area-inset-bottom));
+    width: 54px;
+    height: 54px;
+  }
+  #start-screen {
+    padding: 12px;
+    gap: 8px;
+  }
+  .start-card {
+    padding: 16px 14px;
+  }
+  .start-card h1 {
+    font-size: 22px;
+  }
+  .start-emoji {
+    font-size: 36px;
+  }
+  .start-steps {
+    margin: 10px 0;
+    gap: 6px;
+  }
+  .start-steps li {
+    padding: 6px 10px;
+    font-size: 11.5px;
+  }
+}
+
+/* تمام‌صفحه فعال — HUD باید با safe-area درست کار کند */
+:fullscreen .hud-top,
+:-webkit-full-screen .hud-top,
+.pseudo-fullscreen .hud-top {
+  padding-top: calc(10px + env(safe-area-inset-top));
+}
+:fullscreen .hud-bottom,
+:-webkit-full-screen .hud-bottom,
+.pseudo-fullscreen .hud-bottom {
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
 }
 
 /* ===== بازی‌های دیگر (لینک از صفحهٔ شروع) ===== */
@@ -1242,4 +1519,16 @@ button {
 .start-others a:hover {
   background: rgba(255, 255, 255, 0.2);
   transform: translateY(-1px);
+}
+
+/* ===== پشتیبانی از visualViewport روی موبایل ===== */
+@supports (height: 100dvh) {
+  html, body, #scene, #hud, #start-screen, #day-intro {
+    height: 100dvh;
+  }
+}
+@supports (height: 100svh) {
+  html {
+    /* svh = کوچک‌ترین viewport (بدون آدرس‌بار) — برای جلوگیری از پرش */
+  }
 }

@@ -6,7 +6,7 @@ import { PRODUCTS, GAME } from './config.js';
 import { demandInfo } from './economy.js';
 import { levelInfo, levelTitle, questProgress, QUEST_TYPES, WEATHERS } from './story.js';
 import { fa } from './util.js';
-import { fullscreenApi, isFullscreen } from './fullscreen.js';
+import { isFullscreen, onFullscreenChange } from './fullscreen.js';
 
 let cb = {};
 const $ = (id) => document.getElementById(id);
@@ -171,7 +171,19 @@ function syncFullscreenUi() {
   const on = isFullscreen();
   for (const id of ['btn-fullscreen', 'btn-fs-start']) {
     const b = $(id);
-    if (b) b.classList.toggle('active', on);
+    if (b) {
+      b.classList.toggle('active', on);
+      // عنوان دکمه را هم عوض کن
+      if (on) {
+        b.title = 'خروج از تمام‌صفحه';
+        if (b.id === 'btn-fs-start') b.textContent = '↩ خروج از تمام‌صفحه';
+        if (b.id === 'btn-fullscreen') b.textContent = '⛶';
+      } else {
+        b.title = 'نمایش تمام‌صفحه';
+        if (b.id === 'btn-fs-start') b.textContent = '⛶ تمام‌صفحه';
+        if (b.id === 'btn-fullscreen') b.textContent = '⛶';
+      }
+    }
   }
 }
 
@@ -181,10 +193,18 @@ function syncFullscreenUi() {
  * (cb.toggleFullscreen) پیام راهنما نشان می‌دهد.
  */
 export function initFullscreenButton() {
-  const api = typeof document !== 'undefined' ? fullscreenApi() : null;
-  if (api && typeof document.addEventListener === 'function') {
-    document.addEventListener(api.change, syncFullscreenUi);
-  }
+  // گوش دادن به همهٔ رویدادهای تغییر fullscreen
+  onFullscreenChange(() => {
+    syncFullscreenUi();
+  });
+  // همچنین برای pseudo-fullscreen یک MutationObserver
+  try {
+    if (typeof MutationObserver !== 'undefined' && document.documentElement) {
+      const obs = new MutationObserver(() => syncFullscreenUi());
+      obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+      if (document.body) obs.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    }
+  } catch (_) {}
   syncFullscreenUi();
 }
 
@@ -317,7 +337,7 @@ export function showStoreInfo(state, ctx = {}) {
              <div class="ib-title">${quest.emoji} مأموریت امروز</div>
              <div class="ib-line">${quest.label}: ${fa(p)} از ${fa(quest.target)} ${quest.unit}
              ${p >= quest.target ? '<b class="pos">✔ انجام شد</b>' : ''}</div>
-             <div class="lvl-track small"><div class="lvl-fill" style="width:${pct(p / quest.target)}"></div></div>
+             <div class="lvl-track small"><div class="lvl-fill" style="width:${pct(p / quest.target)}\"></div></div>
              <small>پاداش: ${fa(quest.xp)} تجربه</small>
            </div>`
         : ''
@@ -332,7 +352,7 @@ export function showStoreInfo(state, ctx = {}) {
                   <div class="bar ${h.profit >= 0 ? 'pos' : 'neg'}" style="height:${Math.max(
                   6,
                   (Math.abs(h.profit) / maxAbs) * 100
-                )}%"></div>
+                )}%\"></div>
                   <span>${fa(h.day)}</span>
                 </div>`
               )
@@ -351,7 +371,7 @@ export function showStoreInfo(state, ctx = {}) {
     </div>
     ${
       tips.length
-        ? `<div class="info-box"><div class="ib-title">💡 راهنمایی مربی</div>${tips
+        ? `<div class="info-box\"><div class="ib-title">💡 راهنمایی مربی</div>${tips
             .map((t) => `<div class="ib-line">${t}</div>`)
             .join('')}</div>`
         : ''
@@ -404,7 +424,7 @@ export function showReport(state, extra = {}) {
                 <div class="bar ${h.profit >= 0 ? 'pos' : 'neg'}" style="height:${Math.max(
                 6,
                 (Math.abs(h.profit) / maxAbs) * 100
-              )}%"></div>
+              )}%\"></div>
                 <span>${fa(h.day)}</span></div>`
             )
             .join('')}</div>`
@@ -413,7 +433,7 @@ export function showReport(state, extra = {}) {
 
     <div class="xp-line">
       <span>⭐ سطح ${fa(info.level)} — ${levelTitle(info.level)}</span>
-      <div class="lvl-track small"><div class="lvl-fill" style="width:${pct(info.progress)}"></div></div>
+      <div class="lvl-track small"><div class="lvl-fill" style="width:${pct(info.progress)}\"></div></div>
     </div>
 
     <div class="rep-total">سرمایهٔ فعلی تو: <b>${money(state.money)}</b></div>
