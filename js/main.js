@@ -1,14 +1,13 @@
 // =============================================================
 //  main.js — نقطهٔ ورود: صحنهٔ سه‌بعدی، حلقهٔ بازی و اتصال
-//  همهٔ سیستم‌ها به هم (روزها، خرید، قیمت‌گذاری، مشتری‌ها)
+//  همهٔ سیستم‌ها به هم (روزها، خرید، قیمت‌گذاری، مشتری‌ها، داستان)
 //
 //  ⚠️ ترتیب راه‌اندازی عمداً این‌گونه است:
 //    ۱) اول دکمه‌ها وصل می‌شوند (ui.initUI) — یعنی دکمهٔ
 //       «شروع بازی» همیشه زنده است.
 //    ۲) بعد موتور سه‌بعدی ساخته می‌شود و داخل try است؛ اگر
 //       WebGL در دسترس نبود، بازی در «حالت بدون گرافیک» ادامه
-//       می‌یابد و پیام خطا نمایش داده می‌شود — نه یک دکمهٔ مرده
-//       و بی‌سروصدا.
+//       می‌یابد و پیام خطا نمایش داده می‌شود — نه یک دکمهٔ مرده.
 // =============================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -22,12 +21,26 @@ import {
   refreshShelves,
   refreshTags,
   floatText,
+  sparkle,
   REGISTER_POS,
 } from './scene3d.js';
 import { DaySimulation } from './customers.js';
+import {
+  WEATHERS,
+  rollWeather,
+  rollEvent,
+  rollQuest,
+  applyDay,
+  evaluateQuest,
+  questResultText,
+  daySummaryLine,
+  levelInfo,
+  levelTitle,
+  liveLine,
+} from './story.js';
 import * as ui from './ui.js';
 import { sfx } from './sound.js';
-import { fa, money } from './util.js';
+import { fa } from './util.js';
 
 let renderer = null;
 let scene = null;
@@ -37,9 +50,11 @@ let world = null;
 let state = null;
 let phase = 'menu'; // menu | prep | running | report
 let sim = null;
+let story = { weather: WEATHERS.sun, event: null };
+let camIntro = null;
 const clock = new THREE.Clock();
-const HOME_CAM = new THREE.Vector3(0.9, 4.6, 8.0);
-const HOME_TARGET = new THREE.Vector3(0, 0.85, 0);
+const HOME_CAM = new THREE.Vector3(1.1, 3.5, 7.2);
+const HOME_TARGET = new THREE.Vector3(-0.2, 1.0, 0.2);
 
 init();
 
@@ -54,6 +69,8 @@ function init() {
     startDay,
     nextDay,
     resetView,
+    showInfo,
+    toggleSound,
     refreshSupplier: () => state && ui.refreshSupplier(state),
     refreshPricing: () => state && ui.refreshPricing(state),
   });
@@ -87,12 +104,13 @@ function initEngine() {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0xbfe0f2);
-    scene.fog = new THREE.Fog(0xcfe8f7, 26, 48);
+    scene.fog = new THREE.Fog(0xcfe8f7, 30, 60);
 
-    camera = new THREE.PerspectiveCamera(46, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera = new THREE.PerspectiveCamera(48, window.innerWidth / window.innerHeight, 0.1, 200);
     camera.position.copy(HOME_CAM);
 
     controls = new OrbitControls(camera, renderer.domElement);
@@ -100,13 +118,14 @@ function initEngine() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.enablePan = false;
-    controls.minDistance = 3.5;
-    controls.maxDistance = 15;
+    controls.minDistance = 3;
+    controls.maxDistance = 16;
     controls.minPolarAngle = 0.12;
-    controls.maxPolarAngle = 1.52;
+    controls.maxPolarAngle = 1.5;
 
     buildLights(scene);
     world = createWorld(scene);
+    world.setDoor(false);
     return true;
   } catch (err) {
     // هر خطایی اینجا افتاد: رندر را خاموش کن ولی بازی را نگه دار
@@ -139,15 +158,40 @@ function onResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
+// ---------- داستان روز ----------
+/** اگر داستان امروز چیده نشده، بچین (هوا، رویداد، مأموریت) */
+function ensureDayStory(force = false) {
+  if (!state) return story;
+  if (!force && state.storyDay === state.day && state.quest) {
+    story = { weather: WEATHERS[state.weather] || WEATHERS.sun, event: story.event };
+    return story;
+  }
+  const weather = rollWeather(state.day);
+  const event = rollEvent(state.day);
+  applyDay(state, state.day, event, weather);
+  state.quest = rollQuest(state.day);
+  state.storyDay = state.day;
+  story = { weather, event };
+  if (world) world.setWeather(weather.id);
+  return story;
+}
+
 // ---------- شروع بازی ----------
 function enterGame(msg) {
   ui.hideStartScreen(); // صفحهٔ شروع کنار می‌رود تا بازی دیده شود
   ui.showHud();
+  ensureDayStory();
   ui.setHud(state);
+  ui.setSound(state.sound !== false);
+  sfx.setMuted(state.sound === false);
+  ui.setQuest(state.quest, state.dayStats);
   refreshShelves(world, state.inventory);
-  refreshTags(world, state.salePrice);
+  refreshTags(world, state.salePrice, state.market);
+  if (world && world.drawOpenSign) world.drawOpenSign(true);
   phase = 'prep';
+  cameraIntro();
   if (msg) ui.toast(msg, 'info', 3600);
+  ui.flashNews(liveLine('welcome'));
 }
 
 function startNew() {
@@ -183,6 +227,7 @@ function buy(id, n) {
   const cost = state.market[id] * n;
   if (state.money < cost) {
     ui.toast('💸 پول کافی نیست!', 'warn');
+    sfx.error();
     return false;
   }
   state.money -= cost;
@@ -203,9 +248,34 @@ function setPrice(id, delta) {
   if (next === state.salePrice[id]) return;
   state.salePrice[id] = next;
   saveGame(state);
-  refreshTags(world, state.salePrice); // تگ روی قفسه هم به‌روز می‌شود
+  refreshTags(world, state.salePrice, state.market); // تگ روی قفسه هم به‌روز می‌شود
   ui.refreshPricing(state);
   sfx.click();
+}
+
+function toggleSound() {
+  if (!state) return;
+  state.sound = state.sound === false;
+  sfx.setMuted(state.sound === false);
+  ui.setSound(state.sound);
+  saveGame(state);
+}
+
+function showInfo() {
+  if (!state) return;
+  ui.showStoreInfo(state, { tips: buildTips() });
+}
+
+/** راهنمایی‌های ساده و واقعی بر اساس وضعیت فعلی فروشگاه */
+function buildTips() {
+  const tips = [];
+  const empty = PRODUCTS.filter((p) => (state.inventory[p.id] || 0) === 0);
+  if (empty.length) tips.push(`📦 قفسهٔ ${empty.map((p) => p.name).join('، ')} خالی است — از تأمین‌کننده بخر.`);
+  const pricey = PRODUCTS.filter((p) => state.salePrice[p.id] - state.market[p.id] > 3);
+  if (pricey.length) tips.push(`🏷️ قیمت ${pricey.map((p) => p.name).join('، ')} از بازار خیلی بالاتر است؛ مشتری نمی‌خرد.`);
+  if (state.money < 20) tips.push('💸 سرمایه‌ات کم است؛ اول ارزان‌ها را بفروش تا پول برگردد.');
+  if (!tips.length) tips.push('👌 همه‌چیز مرتب است — فقط روز را شروع کن و بفروش!');
+  return tips;
 }
 
 // ---------- شروع روز (ورود مشتری‌ها) ----------
@@ -214,14 +284,30 @@ function startDay() {
   const totalInv = Object.values(state.inventory).reduce((a, b) => a + b, 0);
   const go = () => {
     phase = 'running';
-    closeSheets();
+    ui.closeSheets();
     ui.setRunning(true);
+    ensureDayStory();
+    ui.setQuest(state.quest, state.dayStats);
+    ui.showDayIntro({
+      day: state.day,
+      weather: story.weather,
+      event: story.event,
+      quest: state.quest,
+    });
+    sfx.dayStart();
+    if (world && world.setDoor) world.setDoor(false);
     sim = new DaySimulation(state, world, {
       onSale: (items, rev) => {
-        sfx.coin();
         ui.setHud(state);
         ui.bumpMoney(rev);
-        if (renderer) floatText(world, `+${money(rev)}`, REGISTER_POS);
+        if (renderer) {
+          floatText(world, `+${Math.round(rev)} $`, REGISTER_POS, { color: '#ffe066' });
+        }
+        ui.flashNews(liveLine('sale', { n: items, rev: Math.round(rev) }));
+      },
+      onEnter: (c) => {
+        if (sim && sim.stats.customers % 2 === 1) ui.flashNews(liveLine('enter'));
+        if (c && c.kind === 'kid' && renderer) sparkle(world, c.group, 0x9ad0ff, 4, 0.2);
       },
       onDayEnd: () => endDay(),
     });
@@ -235,36 +321,72 @@ function startDay() {
 
 function endDay() {
   phase = 'report';
+  const s = state.dayStats;
+  const profit = s.revenue - s.expenses;
+  const earnedXp = Math.round(s.itemsSold * 1 + s.buyers * 1.5 + Math.max(0, profit) / 10);
+  const questDone = evaluateQuest(state.quest, s);
+  const beforeLevel = levelInfo(state.xp || 0).level;
+  state.xp = (state.xp || 0) + earnedXp + (questDone && state.quest ? state.quest.xp : 0);
+  const afterLevel = levelInfo(state.xp).level;
+  const isBest = profit > (state.best || 0);
+  state.best = Math.max(state.best || 0, profit);
+  state.totalRevenue = (state.totalRevenue || 0) + s.revenue;
+  state.history = (state.history || []).concat([
+    { day: state.day, revenue: s.revenue, expenses: s.expenses, profit, customers: s.customers, buyers: s.buyers, itemsSold: s.itemsSold },
+  ]).slice(-14);
+  state.reportedExpenses = s.expenses;
   sim = null;
-  // هزینه‌هایی که تا لحظهٔ گزارش محاسبه شده — خرید بعدی (بین گزارش و
-  // روز بعد) به آمارِ روزِ تازه منتقل می‌شود، نه روز قدیم
-  state.reportedExpenses = state.dayStats.expenses;
   ui.setRunning(false);
+  ui.setQuest(state.quest, s);
+  if (world && world.drawRegister) world.drawRegister(['روز تمام', 'صندوق بسته']);
   saveGame(state);
   sfx.dayEnd();
+
+  if (isBest && s.revenue > 0) {
+    setTimeout(() => ui.toast(`🏆 بهترین سود روزت تا حالا! ${fa(profit)} $`, 'info', 4200), 700);
+    sfx.cheer();
+  }
+  if (afterLevel > beforeLevel) {
+    setTimeout(() => {
+      ui.toast(`⭐ سطح ${fa(afterLevel)} شدی — ${levelTitle(afterLevel)}!`, 'info', 4600);
+      ui.flashNews(`⭐ سطح جدید: ${fa(afterLevel)} — ${levelTitle(afterLevel)}`);
+      sfx.cheer();
+    }, 1300);
+  }
   setTimeout(() => {
-    if (phase === 'report') ui.showReport(state);
-  }, 500);
+    if (phase !== 'report') return;
+    ui.showReport(state, {
+      summary: daySummaryLine(s, state.money),
+      questText: questResultText(state.quest, s),
+      xp: earnedXp,
+    });
+    const q = questResultText(state.quest, s);
+    if (q) setTimeout(() => ui.toast(q, 'info', 4000), 600);
+  }, 520);
 }
 
-// ---------- روز بعد: قیمت بازار دوباره تغییر می‌کند ----------
+// ---------- روز بعد: داستان و قیمت‌های تازه ----------
 function nextDay() {
   if (!state || phase !== 'report') return;
   state.day += 1;
   const prev = state.market;
   state.market = rollMarketPrices(state.day, prev);
-  const carried = Math.max(
-    0,
-    state.dayStats.expenses - (state.reportedExpenses ?? state.dayStats.expenses)
-  );
+  const carried = Math.max(0, state.dayStats.expenses - (state.reportedExpenses ?? state.dayStats.expenses));
   state.dayStats = freshDayStats();
   state.dayStats.expenses = carried;
   delete state.reportedExpenses;
   phase = 'prep';
+
+  // داستان روز نو
+  story = { weather: WEATHERS.sun, event: null };
+  ensureDayStory(true);
+  state.quest.done = false;
   saveGame(state);
-  closeSheets();
+  ui.closeSheets();
   ui.setHud(state);
-  refreshTags(world, state.salePrice);
+  ui.setQuest(state.quest, state.dayStats);
+  refreshTags(world, state.salePrice, state.market);
+  ui.showDayIntro({ day: state.day, weather: story.weather, event: story.event, quest: state.quest });
 
   const changed = PRODUCTS.filter((p) => prev[p.id] !== state.market[p.id]);
   if (changed.length) {
@@ -277,16 +399,46 @@ function nextDay() {
   } else {
     ui.toast(`🌅 روز ${fa(state.day)} آغاز شد — قیمت‌ها ثابت ماند`, 'info', 3200);
   }
+  sfx.dayStart();
 }
 
 function closeSheets() {
   ui.closeSheets();
 }
 
+// ---------- دوربین ----------
+function cameraIntro() {
+  if (!camera || !controls) return;
+  camIntro = {
+    t: 0,
+    dur: 2.4,
+    from: new THREE.Vector3(4.2, 2.4, 8.6),
+    look0: new THREE.Vector3(1.2, 1.6, 2.2),
+  };
+  controls.enabled = false;
+}
+
+function updateCameraIntro(dt) {
+  if (!camIntro || !camera) return;
+  camIntro.t += dt;
+  const k = Math.min(1, camIntro.t / camIntro.dur);
+  const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+  camera.position.lerpVectors(camIntro.from, HOME_CAM, e);
+  const look = new THREE.Vector3().lerpVectors(camIntro.look0, HOME_TARGET, e);
+  camera.lookAt(look);
+  if (k >= 1) {
+    camIntro = null;
+    if (controls) {
+      controls.target.copy(HOME_TARGET);
+      controls.enabled = true;
+      controls.update();
+    }
+  }
+}
+
 function resetView() {
   if (camera && controls) {
-    camera.position.copy(HOME_CAM);
-    controls.target.copy(HOME_TARGET);
+    cameraIntro();
   }
   sfx.click();
 }
@@ -295,12 +447,22 @@ function resetView() {
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(0.05, clock.getDelta());
-  if (controls) controls.update();
+  if (camIntro) updateCameraIntro(dt);
+  else if (controls) controls.update();
   if (world) world.update(dt);
   if (sim) {
     sim.update(dt);
-    // ممکن است sim.update روز را تمام کرده و sim را null کرده باشد
-    if (sim) ui.setProgress(sim.spawned, sim.total);
+    if (sim) {
+      ui.setProgress(sim.spawned, sim.total);
+      ui.setClock(sim.clockText, story.weather ? story.weather.emoji : '☀️');
+      ui.setLive(sim.active.length, sim.queue.length);
+      ui.setQuest(state.quest, {
+        itemsSold: sim.stats.itemsSold,
+        buyers: sim.stats.buyers,
+        revenue: sim.stats.revenue,
+        customers: sim.stats.customers,
+      });
+    }
   }
   if (renderer && scene && camera) renderer.render(scene, camera);
 }

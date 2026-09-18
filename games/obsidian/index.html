@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>ابسیدین — داستان سنگ سیاه</title>
+    <meta name="description" content="ابسیدین: بازی نقش‌آفرینی متنی فارسی، چند ساعته، با ۳۲ شخصیت، همراه از همان آغاز و شش پایان." />
+    <meta name="theme-color" content="#0b0d12" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <!-- ============ صفحهٔ آغاز ============ -->
+    <section id="screen-title" class="screen">
+      <div class="title-wrap">
+        <div class="stone" aria-hidden="true">🪨</div>
+        <h1>ابسیدین</h1>
+        <p class="sub">داستان سنگ سیاه — بازی نقش‌آفرینی متنی، کامل فارسی و با صدا</p>
+        <div class="title-feats">
+          <span>🎭 ۳۲ شخصیت</span><span>🏹 همراه از آغاز</span><span>🗺️ ۲۲ مکان</span>
+          <span>⚔️ نبرد نوبتی</span><span>🔚 ۶ پایان</span><span>🎙️ با صدا</span>
+        </div>
+        <button id="btn-new" class="cta">داستان تازه</button>
+        <button id="btn-continue" class="cta ghost hidden">ادامهٔ داستان</button>
+        <button id="btn-settings" class="mini">⚙️ تنظیمات صدا و متن</button>
+        <p class="hint">چند ساعت داستان، بدون گرافیک — فقط متن، صدا و انتخاب‌های تو.</p>
+      </div>
+    </section>
+
+    <!-- ============ ساخت شخصیت ============ -->
+    <section id="screen-create" class="screen hidden">
+      <div class="card">
+        <h2>چه‌کسی در این داستان راه می‌رود؟</h2>
+        <label class="field">
+          <span>نام تو</span>
+          <input id="in-name" type="text" maxlength="14" placeholder="مثلاً: آرش" autocomplete="off" />
+        </label>
+        <div class="field">
+          <span>کِه‌ای؟</span>
+          <div class="picks" id="pick-gender">
+            <button class="pick" data-v="m">مرد</button>
+            <button class="pick" data-v="f">زن</button>
+          </div>
+        </div>
+        <div class="field">
+          <span>پیشینه‌ات؟</span>
+          <div class="picks col" id="pick-origin">
+            <button class="pick" data-v="kargar">
+              <b>کارگرِ دهکده</b><small>زور و پشتکار؛ +۲ زور، کمی پول</small>
+            </button>
+            <button class="pick" data-v="rohan">
+              <b>شاگردِ موبد</b><small>خرد و آیین؛ +۲ خرد، شربت جان</small>
+            </button>
+            <button class="pick" data-v="yatim">
+              <b>یتیمِ کوه</b><small>دل و چابکی؛ +۱ دل، +۱ چابکی، کمان</small>
+            </button>
+          </div>
+        </div>
+        <div class="preview" id="create-preview"></div>
+        <button id="btn-begin" class="cta">شروع داستان</button>
+        <button id="btn-back" class="mini">بازگشت</button>
+      </div>
+    </section>
+
+    <!-- ============ بازی ============ -->
+    <main id="game" class="hidden">
+      <header id="hud">
+        <div class="hud-row">
+          <span class="pill" id="hud-place">🏘️ دهکدهٔ سنگاب</span>
+          <span class="pill" id="hud-day">📅 روز ۱ · روز</span>
+          <span class="pill gold" id="hud-gold">💰 ۱۲</span>
+          <span class="pill hp" id="hud-hp">❤️ ۳۰/۳۰</span>
+          <span class="pill en" id="hud-energy">⚡ ۱۲/۱۲</span>
+          <span class="pill lv" id="hud-level">⭐ ۱</span>
+        </div>
+        <div class="hud-row">
+          <button class="icon-btn" id="btn-inv" title="کوله">🎒</button>
+          <button class="icon-btn" id="btn-map" title="نقشه">🗺️</button>
+          <button class="icon-btn" id="btn-quests" title="دفتر ماجرا">📓</button>
+          <button class="icon-btn" id="btn-full" title="تمام‌صفحه">⛶</button>
+          <button class="icon-btn" id="btn-speak" title="خواندن دوباره">🔊</button>
+          <button class="icon-btn" id="btn-mute" title="قطع صدا">🔈</button>
+          <button class="icon-btn" id="btn-settings2" title="تنظیمات">⚙️</button>
+        </div>
+      </header>
+
+      <section id="stage">
+        <div id="scene" class="scene">
+          <div class="scene-art" id="scene-art">🌄</div>
+          <h2 class="scene-title" id="scene-title">…</h2>
+          <div class="scene-text" id="scene-text"></div>
+          <div class="scene-extra" id="scene-extra"></div>
+          <div class="choices" id="choices"></div>
+        </div>
+
+        <div id="combat" class="combat hidden">
+          <div class="foes" id="combat-foes"></div>
+          <div class="hpbar" id="combat-hp"></div>
+          <div class="clog" id="combat-log"></div>
+          <div class="choices" id="combat-actions"></div>
+        </div>
+      </section>
+
+      <footer id="ticker"><span id="toast-wrap"></span></footer>
+    </main>
+
+    <!-- ============ پنل‌ها ============ -->
+    <div id="sheet-backdrop"></div>
+
+    <aside class="sheet" id="sheet-inv">
+      <div class="sheet-head"><div><b>🎒 کوله</b><div class="sheet-sub" id="inv-who"></div></div>
+        <button class="sheet-close" data-close>✕</button></div>
+      <div class="sheet-body" id="inv-body"></div>
+    </aside>
+
+    <aside class="sheet" id="sheet-map">
+      <div class="sheet-head"><div><b>🗺️ نقشهٔ ابسیدین</b><div class="sheet-sub">جاهایی که دیده‌ای و راه‌هایی که می‌شناسی</div></div>
+        <button class="sheet-close" data-close>✕</button></div>
+      <div class="sheet-body" id="map-body"></div>
+    </aside>
+
+    <aside class="sheet" id="sheet-quests">
+      <div class="sheet-head"><div><b>📓 دفتر ماجرا</b><div class="sheet-sub" id="quest-sub"></div></div>
+        <button class="sheet-close" data-close>✕</button></div>
+      <div class="sheet-body" id="quest-body"></div>
+    </aside>
+
+    <aside class="sheet" id="sheet-settings">
+      <div class="sheet-head"><div><b>⚙️ تنظیمات</b><div class="sheet-sub">صدا، متن و ذخیره</div></div>
+        <button class="sheet-close" data-close>✕</button></div>
+      <div class="sheet-body">
+        <label class="row-line"><span>خواندن خودکار متن با صدا</span>
+          <input type="checkbox" id="set-auto" checked /></label>
+        <label class="row-line"><span>صداهای بازی (ضربه، سکه، سطح)</span>
+          <input type="checkbox" id="set-sfx" checked /></label>
+        <label class="row-line"><span>سرعت خواندن</span>
+          <input type="range" id="set-rate" min="0.7" max="1.3" step="0.05" value="1" /></label>
+        <label class="row-line"><span>اندازهٔ متن</span>
+          <input type="range" id="set-font" min="14" max="24" step="1" value="17" /></label>
+        <div class="row-line"><span>ویس‌های ضبط‌شده</span><b id="set-clips">۰</b></div>
+        <div class="row-line"><span>تعداد صحنه‌های دیده‌شده</span><b id="set-scenes">۰</b></div>
+        <button class="cta ghost small" id="btn-save">💾 ذخیرهٔ بازی</button>
+        <button class="cta ghost small" id="btn-wipe">🗑️ پاک‌کردن پیشرفت</button>
+      </div>
+    </aside>
+
+    <!-- ============ پایان ============ -->
+    <section id="screen-end" class="screen hidden">
+      <div class="card end-card">
+        <div class="end-art" id="end-art">🌑</div>
+        <h2 id="end-title">پایان</h2>
+        <div class="scene-text" id="end-text"></div>
+        <div class="scene-extra" id="end-extra"></div>
+        <div class="end-stats" id="end-stats"></div>
+        <button class="cta" id="btn-again">دوباره از آغاز</button>
+        <button class="cta ghost" id="btn-title2">بازگشت به صفحهٔ اول</button>
+      </div>
+    </section>
+
+    <div id="toast" class="toast hidden"></div>
+    <div id="confirm" class="hidden">
+      <div class="card small-card">
+        <p id="confirm-msg"></p>
+        <div class="picks">
+          <button class="cta small" id="confirm-yes">بله</button>
+          <button class="cta ghost small" id="confirm-no">نه</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>
