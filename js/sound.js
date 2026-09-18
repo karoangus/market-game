@@ -167,4 +167,14 @@ export const sfx = {
     tone(200, 0.12, 'square', 0.035);
     tone(160, 0.16, 'square', 0.03, 0.1);
   },
+  /**
+   * صدای قدم (کنترل اول‌شخص).
+   * بیرونِ فروشگاه (آسفالت) کمی خش‌تر و بم‌تر از کاشیِ داخل است.
+   */
+  step(outside = false) {
+    if (!ctx || muted) return; // قبل از اولین تعامل، بی‌صدا
+    const j = 0.9 + Math.random() * 0.2;
+    noise(outside ? 0.055 : 0.04, outside ? 0.017 : 0.011);
+    tone((outside ? 66 : 86) * j, 0.045, 'sine', outside ? 0.013 : 0.009);
+  },
 };

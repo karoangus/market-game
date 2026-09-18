@@ -34,6 +34,7 @@ button {
   width: 100%;
   height: 100%;
   display: block;
+  touch-action: none; /* کنترل اول‌شخص: لمس صفحه نباید صفحه را اسکرول کند */
 }
 
 /* ---------- HUD ---------- */
@@ -1014,6 +1015,128 @@ button {
 }
 .quest-chip.done {
   animation: pulseGold 1.6s ease-out 2;
+}
+
+/* =============================================================
+   نمای اول‌شخص: کراس‌هیر، راهنمای تعامل، جوی‌استیک لمسی، راهنمایی
+   ============================================================= */
+.fp-el {
+  position: fixed;
+  z-index: 12;
+  opacity: 0;
+  transition: opacity 0.22s ease;
+  pointer-events: none;
+}
+.fp-el.show {
+  opacity: 1;
+}
+
+/* کراس‌هیر وسط صفحه */
+#fp-cross {
+  top: 50%;
+  right: 50%;
+  transform: translate(50%, -50%);
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#fp-cross i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 3px rgba(8, 14, 20, 0.4), 0 0 10px rgba(0, 0, 0, 0.35);
+  transition: all 0.15s ease;
+}
+#fp-cross.on i {
+  background: #ffe066;
+  transform: scale(1.35);
+  box-shadow: 0 0 0 3.5px rgba(8, 14, 20, 0.45), 0 0 14px rgba(255, 224, 102, 0.8);
+}
+
+/* برچسب تعامل (نزدیک قفسه/صندوق شدی) */
+#fp-hint {
+  bottom: calc(148px + env(safe-area-inset-bottom));
+  right: 50%;
+  transform: translateX(50%);
+  background: rgba(13, 22, 30, 0.88);
+  border: 1px solid rgba(255, 233, 155, 0.5);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 8px 15px;
+  border-radius: 999px;
+  white-space: nowrap;
+  max-width: 92vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* راهنمای کنترل (اول بازی — تا اولین تعامل) */
+#fp-tip {
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  right: 50%;
+  transform: translateX(50%);
+  background: rgba(10, 18, 26, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #bfd2e2;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 13px;
+  border-radius: 999px;
+  white-space: nowrap;
+  max-width: 94vw;
+}
+
+/* جوی‌استیک لمسی — شناور، همان‌جایی که انگشت می‌نشیند */
+#fp-joy {
+  width: 118px;
+  height: 118px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(13, 22, 30, 0.28);
+  z-index: 11;
+}
+#fp-joy-knob {
+  position: absolute;
+  top: 50%;
+  right: 50%;
+  margin: -23px -23px 0 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45), inset 0 2px 3px rgba(255, 255, 255, 0.6);
+}
+
+/* دکمهٔ تعامل (موبایل) — وقتی چیزی زیر کراس‌هیر است.
+   سمت راستِ صفحه (شستِ دستِ نگاه)، دور از منطقهٔ جوی‌استیک سمت چپ */
+#fp-act {
+  pointer-events: auto;
+  right: 16px;
+  left: auto;
+  bottom: calc(164px + env(safe-area-inset-bottom));
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 25px;
+  background: linear-gradient(135deg, #f6c945, #e09a1f);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 8px 22px rgba(224, 154, 31, 0.45);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#fp-act:active {
+  transform: scale(0.9);
 }
 
 /* ===== بازی‌های دیگر (لینک از صفحهٔ شروع) ===== */

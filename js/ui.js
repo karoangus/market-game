@@ -19,6 +19,9 @@ let openId = null;
 let lockedSheet = null;
 
 function openSheet(id) {
+  // با بازشدن هر پنل، نشانگر ماوس آزاد شود تا بازیکن بتواند پنل را لمس/کلیک کند
+  if (typeof document !== 'undefined' && document.exitPointerLock && document.pointerLockElement)
+    document.exitPointerLock();
   if (openId) $(openId).classList.remove('open');
   const el = $(id);
   el.classList.add('open');
@@ -47,6 +50,25 @@ export function unlockSheet() {
 export function closeSheets() {
   unlockSheet();
   closeSheet(true);
+}
+
+/**
+ * آیا چیزی روی صفحه باز است که باید ورودیِ اول‌شخص را بگیرد؟
+ * (پنل‌ها، گزارشِ قفل‌شده، کارت شروع روز، جعبهٔ تأیید، صفحهٔ شروع)
+ * main.js نتیجه‌اش را به کنترل اول‌شخص می‌دهد تا بازیکن وسطِ
+ * خواندن گزارش به‌ناگاه به دیوار نکوبد.
+ */
+export function isBlocking() {
+  if (openId || lockedSheet) return true;
+  const di = $('day-intro');
+  if (di && !di.classList.contains('hidden')) return true;
+  const cf = $('confirm-box');
+  if (cf && !cf.classList.contains('hidden')) return true;
+  const ss = $('start-screen');
+  if (ss && !ss.classList.contains('hidden')) return true;
+  const be = $('boot-error');
+  if (be && !be.classList.contains('hidden')) return true;
+  return false;
 }
 
 // ---------- HUD ----------
@@ -179,6 +201,17 @@ export function hideDayIntro() {
   box.classList.remove('show');
   clearTimeout(introTimer);
   setTimeout(() => box.classList.add('hidden'), 320);
+}
+
+// ---------- بازکردن پنل‌ها (برای تعامل اول‌شخص و دکمه‌ها) ----------
+export function openPricingPanel(state) {
+  refreshPricing(state);
+  openSheet('sheet-pricing');
+}
+
+export function openSupplierPanel(state) {
+  refreshSupplier(state);
+  openSheet('sheet-supplier');
 }
 
 // ---------- پنل تأمین‌کننده ----------
