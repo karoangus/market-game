@@ -123,7 +123,7 @@ function mulberry32(a) {
 
 let previousWindow = null;
 async function bootGame(opts = {}) {
-  const { webgl = true, canvas2d = true, pump = false } = opts;
+  const { webgl = true, canvas2d = true, pump = false, mobile = null } = opts;
   if (previousWindow) {
     try { previousWindow.close(); } catch { /* ignore */ }
   }
@@ -145,10 +145,30 @@ async function bootGame(opts = {}) {
     return null;
   };
 
+  // شبیه‌سازیِ گوشیِ عمودی (برای تستِ «تمام‌صفحه = افقی»)
+  if (mobile) {
+    window.matchMedia = (q) => ({
+      media: q,
+      matches: /pointer:\s*coarse|hover:\s*none/.test(q),
+      addEventListener() {},
+      removeEventListener() {},
+      addListener() {},
+      removeListener() {},
+    });
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: mobile.ua || 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) Mobile/15E148 Safari/604.1',
+      configurable: true,
+    });
+    Object.defineProperty(window.navigator, 'maxTouchPoints', { value: 5, configurable: true });
+    Object.defineProperty(window, 'innerWidth', { value: mobile.w || 390, configurable: true, writable: true });
+    Object.defineProperty(window, 'innerHeight', { value: mobile.h || 844, configurable: true, writable: true });
+  }
+
   globalThis.window = window;
   globalThis.document = window.document;
   Object.defineProperty(globalThis, 'navigator', { value: window.navigator, configurable: true, writable: true });
   globalThis.localStorage = window.localStorage;
+  globalThis.MutationObserver = window.MutationObserver;
   globalThis.HTMLCanvasElement = window.HTMLCanvasElement;
   globalThis.Image = window.Image;
   globalThis.self = window;
@@ -395,6 +415,62 @@ console.log('۶) watchdog در index.html — صفحهٔ مرده هیچ‌وق�
   await new Promise((r) => setTimeout(r, 6300));
   check(!boot3.classList.contains('hidden'), 'اگر بازی بالا نیاید، بعد از ۶ ثانیه پیام خطا می‌آید');
   check(/بارگذاری نشدند/.test(boot3.textContent), 'پیام علت و راه‌حل را می‌گوید');
+}
+
+// =============================================================
+console.log('۷) ⛶ دکمهٔ تمام‌صفحه روی موبایل → صفحه «افقی» می‌شود');
+{
+  // jsdom نه Fullscreen API دارد نه screen.orientation.lock — یعنی دقیقاً
+  // همان مسیرِ iOS Safari: شبه‌تمام‌صفحه + چرخشِ ۹۰ درجه با CSS.
+  const g = await bootGame({ webgl: false, mobile: { w: 390, h: 844 } });
+  check(!g.bootError, `ماژول بازی بدون خطا بارگذاری شد (${g.bootError && g.bootError.message})`);
+  const html = g.window.document.documentElement;
+
+  check(!html.classList.contains('force-landscape'), 'قبل از تمام‌صفحه، صفحه نمی‌چرخد');
+
+  g.click('btn-fs-start');
+  await g.tick(120);
+  await g.tick(400);
+
+  check(html.classList.contains('pseudo-fullscreen'), 'شبه‌تمام‌صفحه فعال شد (مرورگر API ندارد)');
+  check(html.classList.contains('force-landscape'), '✅ صفحه «افقی» شد (کلاسِ force-landscape)');
+  check(g.window.document.body.classList.contains('force-landscape'), 'body هم کلاسِ چرخش گرفت');
+  // jsdom متدِ scrollTo را پیاده‌سازی نکرده و برای همان «Not implemented» می‌دهد؛
+  // این محدودیتِ تست است، نه خطای بازی.
+  const realErrors = g.errors.filter((e) => !/scrollTo/.test(e));
+  check(realErrors.length === 0, `بدون خطای کنسول (${realErrors.join(' | ') || '—'})`);
+
+  // دکمه باید حالتِ «خروج» بگیرد
+  const fsBtn = g.$('btn-fs-start');
+  check(/خروج/.test(fsBtn.textContent), `متنِ دکمه به «خروج» عوض شد (${fsBtn.textContent})`);
+
+  // اندازهٔ منطقیِ صفحه باید جابه‌جا شده باشد (۳۹۰×۸۴۴ → ۸۴۴×۳۹۰)
+  const fs = await import(`file://${path.join(ROOT, 'js/fullscreen.js')}?t=probe-${Date.now()}`);
+  const size = fs.getViewportSize();
+  check(size.rotated === true && size.w > size.h, `اندازهٔ منطقی افقی شد: ${size.w}×${size.h}`);
+  const pt = fs.mapPointToLogical(0, 844);
+  check(pt.x === 844 && pt.y === 390, 'مختصاتِ لمس به دستگاهِ چرخانده نگاشت شد');
+
+  // خروج از تمام‌صفحه → چرخش هم باید برداشته شود
+  g.click('btn-fs-start');
+  await g.tick(120);
+  await g.tick(400);
+  check(!html.classList.contains('pseudo-fullscreen'), 'شبه‌تمام‌صفحه بسته شد');
+  check(!html.classList.contains('force-landscape'), 'چرخشِ CSS هم برداشته شد');
+
+  // حلقهٔ rAFِ این پنجره را ببند وگرنه پروسهٔ تست بیرون نمی‌رود
+  try { g.window.close(); } catch { /* ignore */ }
+}
+
+{
+  // دسکتاپ: جهتِ صفحه دست‌نخورده می‌ماند (فقط تمام‌صفحه)
+  const g = await bootGame({ webgl: false });
+  const html = g.window.document.documentElement;
+  g.click('btn-fs-start');
+  await g.tick(120);
+  await g.tick(400);
+  check(!html.classList.contains('force-landscape'), 'روی دسکتاپ صفحه نمی‌چرخد');
+  try { g.window.close(); } catch { /* ignore */ }
 }
 
 console.log('');

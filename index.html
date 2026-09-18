@@ -8,8 +8,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Supermarket" />
-  <meta name="screen-orientation" content="portrait" />
-  <meta name="orientation" content="portrait" />
+  <!-- جهت: «any» تا ⛶ تمام‌صفحه بتواند روی موبایل صفحه را افقی کند
+       (قفلِ portrait این‌جا باعث می‌شد مرورگرهای قدیمیِ سازگار با این متا
+       اجازهٔ چرخش ندهند). حالتِ عادیِ بازی همچنان عمودی‌دوست است. -->
+  <meta name="screen-orientation" content="any" />
+  <meta name="orientation" content="any" />
   <meta name="description" content="سوپرمارکت من — بازی اول‌شخصِ سه‌بعدی مدیریت سوپرمارکت برای موبایل و دسکتاپ: قدم زدن داخل فروشگاه، خرید جنس، قیمت‌گذاری، مشتری‌های واقعی با دست و سبد خرید، هوا، رویدادها و سود روزانه" />
   <title>سوپرمارکت من | بازی مدیریت سوپرمارکت</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🛒</text></svg>" />
@@ -45,7 +48,8 @@
         <li>🛒 از تأمین‌کننده جنس بخر تا روی قفسه چیده شود</li>
         <li>🏷️ قیمت فروش را خودت تعیین کن — نه‌بالا، نه‌پایین!</li>
         <li>🚶 مشتری‌ها کنارت راه می‌روند، با <b>دست و سبد</b> واقعی برمی‌دارند و می‌روند</li>
-        <li>📱 روی موبایل در حالت <b>عمودی</b> هم کامل بازی می‌شود + دکمهٔ <b>⛶ تمام‌صفحه</b></li>
+        <li>📱 روی موبایل در حالت <b>عمودی</b> هم کامل بازی می‌شود</li>
+        <li>⛶ دکمهٔ <b>تمام‌صفحه</b> روی موبایل صفحه را <b>افقی</b> هم می‌کند</li>
         <li>🌦️ هوا و رویدادهای محله روی تعداد مشتری اثر دارد</li>
         <li>💰 پایان روز: سود، زیان، مأموریت و سطح را ببین</li>
       </ul>
@@ -53,7 +57,7 @@
       <button id="btn-continue" class="cta ghost hidden">ادامهٔ بازی</button>
       <div class="start-mini-row">
         <button id="btn-restart" class="mini hidden">شروع از نو (پاک کردن پیشرفت)</button>
-        <button id="btn-fs-start" class="mini" title="نمایش تمام‌صفحه">⛶ تمام‌صفحه</button>
+        <button id="btn-fs-start" class="mini" title="تمام‌صفحه و افقی‌کردنِ صفحه">⛶ تمام‌صفحهٔ افقی</button>
       </div>
       <div class="start-others">
         <span>🎲 بازی‌های دیگر:</span>
@@ -63,7 +67,7 @@
     </div>
     <p class="start-hint">
       🖥️ WASD حرکت · ماوس نگاه · Shift دویدن · E تعامل<br />
-      📱 چپ: راه‌رفتن · 🏃 نگه‌دار = دویدن · راست: نگاه · ⛶ تمام‌صفحه
+      📱 چپ: راه‌رفتن · 🏃 نگه‌دار = دویدن · راست: نگاه · ⛶ تمام‌صفحه = افقی
     </p>
   </div>
 
@@ -75,7 +79,7 @@
       <div class="hud-pill hud-level" id="hud-level">⭐ سطح ۱</div>
       <div class="hud-pill hud-money" id="hud-money"><span id="money-val">۰ $</span></div>
       <button id="btn-sound" class="icon-btn" title="صدا">🔊</button>
-      <button id="btn-fullscreen" class="icon-btn" title="نمایش تمام‌صفحه">⛶</button>
+      <button id="btn-fullscreen" class="icon-btn" title="تمام‌صفحه و افقی‌کردنِ صفحه">⛶</button>
       <button id="btn-reset-view" class="icon-btn" title="برگشت به وسط فروشگاه">📍</button>
     </div>
 

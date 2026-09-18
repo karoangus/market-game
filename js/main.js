@@ -42,7 +42,18 @@ import {
 import * as ui from './ui.js';
 import { sfx } from './sound.js';
 import { fa } from './util.js';
-import { toggleFullscreenAsync, onFullscreenChange, isFullscreen, tryLockPortrait } from './fullscreen.js';
+import {
+  toggleFullscreenAsync,
+  onFullscreenChange,
+  isFullscreen,
+  isForcedLandscape,
+  applyLandscape,
+  releaseLandscape,
+  refreshForcedLandscape,
+  getViewportSize,
+  debugForceLandscape,
+  ORIENTATION_EVENT,
+} from './fullscreen.js';
 
 let renderer = null;
 let scene = null;
@@ -78,15 +89,13 @@ function init() {
   ui.showContinue(hasSave());
   window.addEventListener('resize', onResize);
   // چرخش گوشی و تغییر orientation
-  window.addEventListener('orientationchange', () => {
-    // تاخیر کوتاه تا ابعاد جدید اعمال شود
-    setTimeout(onResize, 120);
-    setTimeout(onResize, 500);
-  });
+  window.addEventListener('orientationchange', onOrientationChanged);
   // Screen Orientation API تغییر جهت
   if (typeof screen !== 'undefined' && screen.orientation && screen.orientation.addEventListener) {
-    screen.orientation.addEventListener('change', () => setTimeout(onResize, 150));
+    screen.orientation.addEventListener('change', onOrientationChanged);
   }
+  // جهتِ منطقیِ صفحه عوض شد (قفلِ جهت یا چرخشِ CSS) → رندر را اندازه بزن
+  window.addEventListener(ORIENTATION_EVENT, onOrientationChanged);
   // تمام‌صفحه تغییر کرد → رندر و FOV را به‌روز کن
   onFullscreenChange(() => {
     setTimeout(() => {
@@ -105,33 +114,78 @@ function init() {
   // نشانهٔ «بازی بالا آمد» برای watchdog در index.html
   window.__MG_READY__ = true;
 
-  // اگر صفحه از اول عمودی است، سعی کن portrait را به عنوان پیش‌فرض نگه داری
-  // (فقط وقتی کاربر قبلاً تمام‌صفحه بوده)
-  if (isFullscreen()) {
-    tryLockPortrait();
+  // اگر صفحه از اول تمام‌صفحه باز شده (مثلاً reload داخل تمام‌صفحه)،
+  // همان قانون «تمام‌صفحه = افقی» را برقرار کن.
+  // 🔎 کلیدِ ?force-landscape=1 هم همان چرخشِ CSSِ آیفون را (برای
+  //    اشکال‌زدایی) روی هر دستگاهی — از جمله دسکتاپ — روشن می‌کند.
+  if (isFullscreen() || debugForceLandscape()) {
+    applyLandscape().catch(() => {});
+    setTimeout(onResize, 60);
   }
 }
 
 /**
+ * چرخش گوشی / تغییر جهت منطقی صفحه.
+ * اگر کاربر گوشی را «واقعاً» افقی کرده باشد، چرخشِ CSS باید برداشته
+ * شود (وگرنه تصویر دو بار می‌چرخد)؛ بعد اندازهٔ رندر به‌روز می‌شود.
+ */
+function onOrientationChanged() {
+  try {
+    if (refreshForcedLandscape()) {
+      // چرخشِ CSS برداشته شد → کمی صبر کن تا ابعاد واقعی بنشیند
+      setTimeout(onResize, 60);
+    }
+    if (isFullscreen() && !isForcedLandscape()) {
+      // در تمام‌صفحه هنوز عمودی‌ایم؟ یک بار دیگر افقی را تلاش کن
+      applyLandscape().catch(() => {});
+    }
+  } catch (_) {}
+  // تاخیر کوتاه تا ابعاد جدید اعمال شود
+  onResize();
+  setTimeout(onResize, 120);
+  setTimeout(onResize, 400);
+}
+
+/**
  * تغییر حالت تمام‌صفحه — نسخهٔ جدید با پشتیبانی کامل موبایل.
- * روی اندروید: واقعاً تمام‌صفحه + قفل portrait
- * روی iOS جدید (16.4+): تمام‌صفحه
- * روی iOS قدیم: pseudo-fullscreen (کلاس CSS + اسکرول) + قفل جهت اگر ممکن باشد
+ *
+ * ⛶ قانونِ این نسخه: **تمام‌صفحه = افقی**.
+ *   روی اندروید: تمام‌صفحهٔ واقعی + قفلِ جهت روی landscape
+ *   روی iOS جدید (16.4+): تمام‌صفحه + قفلِ جهت (اگر مرورگر بدهد)
+ *   روی iOS قدیم/سافاری: pseudo-fullscreen + چرخشِ ۹۰ درجه با CSS
+ *   روی دسکتاپ: فقط تمام‌صفحه (جهت دست‌نخورده)
  */
 async function toggleFs() {
   try {
     const r = await toggleFullscreenAsync();
     if (r.ok) {
       sfx.click();
-      // بعد از ورود موفق، یک بار دیگر سایز را به‌روز کن
-      setTimeout(onResize, 100);
       if (r.action === 'enter') {
-        if (r.reason === 'pseudo') {
-          ui.toast('⛶ حالت تمام‌صفحهٔ شبیه‌سازی فعال شد — برای تجربهٔ بهتر بازی را نصب کن', 'info', 3500);
+        // حالا جهت را افقی کن و اندازهٔ رندر را با «ابعاد منطقی» تازه کن
+        const o = await applyLandscape().catch(() => ({ ok: false, mode: 'unsupported' }));
+        onResize();
+        setTimeout(onResize, 120);
+        setTimeout(onResize, 420);
+        if (r.reason === 'pseudo' && o.mode !== 'lock') {
+          ui.toast(
+            o.mode === 'css'
+              ? '⛶ تمام‌صفحه شد و صفحه افقی چرخید — برای تجربهٔ بهتر بازی را نصب کن'
+              : '⛶ حالت تمام‌صفحهٔ شبیه‌سازی فعال شد — گوشی را افقی بگیر',
+            'info',
+            3800
+          );
+        } else if (o.mode === 'css') {
+          ui.toast('⛶ تمام‌صفحه + افقی شد (چرخش با خودِ بازی)', 'info', 2600);
+        } else if (o.mode === 'lock') {
+          ui.toast('⛶ تمام‌صفحه + افقی شد', 'info', 2200);
         } else {
           ui.toast('⛶ تمام‌صفحه فعال شد', 'info', 2000);
         }
       } else {
+        await releaseLandscape().catch(() => {});
+        onResize();
+        setTimeout(onResize, 120);
+        setTimeout(onResize, 400);
         ui.toast('↩ از تمام‌صفحه خارج شدی', 'info', 1800);
       }
     } else {
@@ -251,15 +305,12 @@ function registerServiceWorker() {
 function onResize() {
   if (!renderer || !camera) return; // حالت بدون گرافیک
   // روی موبایل، window.innerHeight بعد از مخفی شدن آدرس‌بار تغییر می‌کند
-  // از visualViewport اگر موجود باشد استفاده کن (دقیق‌تر)
-  let w = window.innerWidth;
-  let h = window.innerHeight;
-  try {
-    if (window.visualViewport) {
-      w = window.visualViewport.width || w;
-      h = window.visualViewport.height || h;
-    }
-  } catch (_) {}
+  // (از visualViewport اگر موجود باشد استفاده می‌شود — دقیق‌تر) و در حالتِ
+  // «افقیِ اجباری» عرض/ارتفاعِ منطقی جابه‌جا می‌شوند، چون چرخشِ CSS مقدارِ
+  // innerWidth/innerHeight را عوض نمی‌کند.
+  const size = getViewportSize();
+  let w = size.w || window.innerWidth;
+  let h = size.h || window.innerHeight;
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
   renderer.setSize(w, h);

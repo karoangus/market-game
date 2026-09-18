@@ -8,19 +8,37 @@
 //   • بازی عمودی نمی‌شد: هیچ تلاشی برای قفل جهت صفحه (portrait)
 //     انجام نمی‌شد.
 //   • resize بعد از fullscreenchange فراخوانی نمی‌شد.
+//   • ⛶ دکمهٔ تمام‌صفحه فقط «تمام‌صفحه» می‌کرد و گوشی عمودی
+//     می‌ماند — یعنی همان تجربهٔ تنگِ عمودی، فقط بدونِ آدرس‌بار.
 //
 //  این نسخه:
 //   • همهٔ پیشوندها (standard, webkit, moz, ms) را می‌شناسد.
 //   • enter/exit را با Promise مدیریت می‌کند و خطا را برمی‌گرداند.
-//   • روی موبایل سعی می‌کند جهت صفحه را portrait قفل کند.
+//   • ✅ تمام‌صفحه = افقی (landscape): روی موبایل همراه با ورود به
+//     تمام‌صفحه، جهتِ صفحه افقی می‌شود (applyLandscape).
+//       - اندروید/کروم و PWA نصب‌شده → قفلِ واقعیِ جهت
+//         (screen.orientation.lock('landscape'))
+//       - iOS Safari و مرورگرهای بدون API → چرخشِ ۹۰ درجهٔ کلِ
+//         صفحه با CSS (کلاس force-landscape روی <html>)
 //   • fallback شبه‌تمام‌صفحه برای iOS قدیم (pseudo-fullscreen).
 //   • تابع onFullscreenChange برای گوش دادن به همهٔ رویدادها.
 //   • toggleFullscreen قدیمی (sync) برای سازگاری با تست‌ها حفظ شد.
+//
+//  ⚠️ وقتی جهت با CSS می‌چرخد، window.innerWidth/innerHeight تغییر
+//     نمی‌کنند (فیزیکی می‌مانند). پس هر جایی که اندازهٔ «منطقیِ»
+//     صفحه لازم است باید از getViewportSize() استفاده کند و
+//     مختصاتِ لمس/ماوس با mapPointToLogical() جابه‌جا شود — وگرنه
+//     رندرر کج می‌شود و جوی‌استیک برعکس کار می‌کند.
 // =============================================================
 
 /** @returns {Document|undefined} */
 function getDoc() {
   return typeof document !== 'undefined' ? document : undefined;
+}
+
+/** @returns {(Window & typeof globalThis)|undefined} */
+function getWin() {
+  return typeof window !== 'undefined' ? window : undefined;
 }
 
 /** عنصر فعلی تمام‌صفحه (با همهٔ پیشوندها) */
@@ -181,6 +199,9 @@ function getExitFn() {
 /**
  * سعی می‌کند جهت صفحه را portrait قفل کند.
  * روی دسکتاپ یا مرورگرهای بدون API بی‌صدا شکست می‌خورد.
+ *
+ * ⚠️ دیگر هنگام تمام‌صفحه صدا زده نمی‌شود (جایش را به applyLandscape
+ *    داده) — فقط برای سازگاری با کد/تستِ قدیمی نگه داشته شده.
  * @returns {Promise<boolean>}
  */
 export async function tryLockPortrait() {
@@ -239,6 +260,270 @@ export async function tryUnlockOrientation() {
   return false;
 }
 
+// =============================================================
+//  جهتِ صفحه: «تمام‌صفحه = افقی» (مخصوص موبایل)
+//
+//  سه لایه دارد، به ترتیبِ کیفیت:
+//   ۱) lock   — قفلِ واقعیِ جهت با Screen Orientation API
+//               (اندروید/کروم، فایرفاکس، و PWA نصب‌شده).
+//   ۲) css    — چرخشِ ۹۰ درجهٔ کلِ صفحه با کلاس force-landscape
+//               (iOS Safari که نه Fullscreen API دارد نه قفلِ جهت).
+//   ۳) none   — دسکتاپ یا دستگاهی که از قبل افقی است (کاری لازم نیست).
+// =============================================================
+
+/** ترتیب تلاش برای قفلِ جهت — بعضی مرورگرها فقط یکی را می‌فهمند */
+const LANDSCAPE_LOCKS = ['landscape', 'landscape-primary', 'landscape-secondary'];
+
+/** نامِ رویدادی که بعد از تغییرِ جهت روی window پخش می‌شود */
+export const ORIENTATION_EVENT = 'mg:orientation';
+
+/** خبر دادن به بقیهٔ ماژول‌ها (main.js) که «سایزت عوض شد» */
+function notifyOrientation(mode) {
+  const w = getWin();
+  if (!w || typeof w.dispatchEvent !== 'function') return;
+  try {
+    const Ctor = w.CustomEvent || (typeof CustomEvent !== 'undefined' ? CustomEvent : null);
+    if (!Ctor) return;
+    w.dispatchEvent(new Ctor(ORIENTATION_EVENT, { detail: { mode } }));
+  } catch (_) {}
+}
+
+/**
+ * آیا دستگاه لمسی/موبایل است؟ روی دسکتاپ جهتِ صفحه را دست نمی‌زنیم
+ * (کسی که پنجرهٔ مرورگر را عمودی کرده، خودش می‌داند چرا).
+ * @returns {boolean}
+ */
+export function isTouchDevice() {
+  const w = getWin();
+  if (!w) return false;
+  try {
+    if (typeof w.matchMedia === 'function' && w.matchMedia('(pointer: coarse)').matches) return true;
+  } catch (_) {}
+  try {
+    const nav = w.navigator || {};
+    const ua = nav.userAgent || '';
+    if (/android|iphone|ipod|ipad|iemobile|windows phone|mobile|silk|kindle|blackberry/i.test(ua)) return true;
+    // آیپدِ جدید با UA دسکتاپی («Macintosh») ولی لمسِ چندانگشتی
+    if ((nav.maxTouchPoints | 0) > 1 && /macintosh|windows nt/i.test(ua)) return true;
+  } catch (_) {}
+  return false;
+}
+
+/**
+ * جهتِ «فیزیکیِ» صفحه — یعنی بدونِ حساب کردنِ چرخشِ CSS.
+ * @returns {'portrait'|'landscape'|null}
+ */
+export function physicalOrientation() {
+  const w = getWin();
+  if (!w) return null;
+  try {
+    const scr = w.screen;
+    const o = scr && (scr.orientation || scr.mozOrientation || scr.msOrientation);
+    if (o && typeof o.type === 'string') return /portrait/i.test(o.type) ? 'portrait' : 'landscape';
+  } catch (_) {}
+  try {
+    if (typeof w.orientation === 'number') return Math.abs(w.orientation % 180) === 0 ? 'portrait' : 'landscape';
+  } catch (_) {}
+  try {
+    const vw = w.innerWidth || 0;
+    const vh = w.innerHeight || 0;
+    if (vw > 0 && vh > 0) return vw >= vh ? 'landscape' : 'portrait';
+  } catch (_) {}
+  return null;
+}
+
+/** آیا الان صفحه با CSS افقی (چرخانده) شده؟ */
+export function isForcedLandscape() {
+  const d = getDoc();
+  if (!d || !d.documentElement || !d.documentElement.classList) return false;
+  return d.documentElement.classList.contains('force-landscape');
+}
+
+/**
+ * روشن/خاموش کردنِ «افقیِ اجباری» با CSS.
+ * کلاس روی <html> و <body> می‌نشیند تا css/style.css کلِ صفحه را
+ * ۹۰ درجه بچرخاند و ابعاد منطقی (var(--appw)/var(--apph)) جابه‌جا شوند.
+ * @param {boolean} on
+ * @returns {boolean} آیا وضعیت عوض شد؟
+ */
+export function setForcedLandscape(on) {
+  const d = getDoc();
+  if (!d || !d.documentElement || !d.documentElement.classList) return false;
+  const want = !!on;
+  try {
+    const before = d.documentElement.classList.contains('force-landscape');
+    d.documentElement.classList.toggle('force-landscape', want);
+    if (d.body && d.body.classList) d.body.classList.toggle('force-landscape', want);
+    const changed = before !== want;
+    if (changed) notifyOrientation(want ? 'css' : 'release');
+    return changed;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * قفلِ جهت روی «افقی» با Screen Orientation API.
+ * بیشتر مرورگرها فقط وقتی اجازه می‌دهند که صفحه تمام‌صفحه باشد.
+ * @returns {Promise<boolean>}
+ */
+export async function tryLockLandscape() {
+  const w = getWin();
+  if (!w) return false;
+  try {
+    const scr = w.screen;
+    const orient = scr && (scr.orientation || scr.mozOrientation || scr.msOrientation);
+    if (orient && typeof orient.lock === 'function') {
+      for (const mode of LANDSCAPE_LOCKS) {
+        try {
+          await orient.lock(mode);
+          return true;
+        } catch (_) {
+          // حالتِ بعدی را امتحان کن
+        }
+      }
+    }
+    // API قدیمی (اندرویدِ قبل از ۵ / IE11)
+    if (scr && typeof scr.lockOrientation === 'function') {
+      for (const mode of LANDSCAPE_LOCKS) {
+        try {
+          if (scr.lockOrientation(mode)) return true;
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+  return false;
+}
+
+/**
+ * کلیدِ اشکال‌زدایی: `?force-landscape=1` در آدرس.
+ * با این کلید، چرخشِ CSS حتی روی دسکتاپ هم اعمال می‌شود تا بشود
+ * حالتِ «افقیِ اجباریِ» آیفون را بدونِ گوشی دید و آزمایش کرد.
+ * @returns {boolean}
+ */
+export function debugForceLandscape() {
+  const w = getWin();
+  try {
+    const q = (w && w.location && (w.location.search || '')) || '';
+    return /[?&](force-landscape|forceLandscape|fl)=1(&|$)/.test(q);
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * صفحه را افقی کن — لایه‌لایه: قفلِ واقعی، بعد چرخشِ CSS.
+ * روی دسکتاپ یا وقتی گوشی از قبل افقی است، کاری نمی‌کند.
+ * @returns {Promise<{ok:boolean, mode:'lock'|'css'|'already'|'desktop'|'unsupported'}>}
+ */
+export async function applyLandscape() {
+  // ۰) کلیدِ اشکال‌زدایی → همان چرخشِ CSS، روی هر دستگاهی
+  if (debugForceLandscape()) {
+    setForcedLandscape(true);
+    return { ok: true, mode: 'css' };
+  }
+  // ۱) دسکتاپ → جهت را دست نزن (و اگر کلاسِ چرخش مانده، بردار)
+  if (!isTouchDevice()) {
+    setForcedLandscape(false);
+    return { ok: true, mode: 'desktop' };
+  }
+  // ۲) قفلِ واقعیِ جهت — بهترین حالت
+  const locked = await tryLockLandscape();
+  if (locked) {
+    setForcedLandscape(false);
+    return { ok: true, mode: 'lock' };
+  }
+  // ۳) گوشی همین حالا افقی است → چرخشِ CSS لازم نیست
+  if (physicalOrientation() === 'landscape') return { ok: true, mode: 'already' };
+  // ۴) iOS Safari و بقیهٔ مرورگرهای بدون API → چرخشِ کلِ صفحه با CSS
+  if (setForcedLandscape(true)) return { ok: true, mode: 'css' };
+  if (isForcedLandscape()) return { ok: true, mode: 'css' };
+  return { ok: false, mode: 'unsupported' };
+}
+
+/**
+ * از حالتِ افقیِ اجباری بیرون بیا (هنگامِ خروج از تمام‌صفحه).
+ * قفلِ جهت هم باز می‌شود تا کاربر آزادانه گوشی را بچرخاند.
+ * @returns {Promise<{ok:boolean}>}
+ */
+export async function releaseLandscape() {
+  setForcedLandscape(false);
+  await tryUnlockOrientation();
+  return { ok: true };
+}
+
+/**
+ * اگر کاربر گوشی را «واقعاً» چرخاند یا از تمام‌صفحه بیرون رفت،
+ * چرخشِ CSS را بردار — وگرنه صفحه دو بار می‌چرخد و وارونه می‌شود.
+ * @returns {boolean} آیا تغییری داده شد؟
+ */
+export function refreshForcedLandscape() {
+  if (!isForcedLandscape()) return false;
+  if (debugForceLandscape()) return false; // در حالتِ آزمایش، چرخش را نگه دار
+  if (!isFullscreen() || physicalOrientation() === 'landscape') return setForcedLandscape(false);
+  return false;
+}
+
+/**
+ * اندازهٔ «منطقیِ» صفحه — همان چیزی که کاربر می‌بیند.
+ * در حالتِ افقیِ اجباری، عرض و ارتفاعِ فیزیکی جابه‌جا می‌شوند چون
+ * window.innerWidth/innerHeight با چرخشِ CSS عوض نمی‌شوند.
+ * @returns {{w:number, h:number, rotated:boolean}}
+ */
+export function getViewportSize() {
+  const w = getWin();
+  if (!w) return { w: 0, h: 0, rotated: false };
+  let vw = w.innerWidth || 0;
+  let vh = w.innerHeight || 0;
+  try {
+    if (w.visualViewport) {
+      vw = w.visualViewport.width || vw;
+      vh = w.visualViewport.height || vh;
+    }
+  } catch (_) {}
+  if (!isForcedLandscape()) return { w: vw, h: vh, rotated: false };
+
+  // حالتِ افقیِ اجباری: دقیق‌ترین عدد، اندازهٔ خودِ bodyِ چرخانده است
+  // (چون با dvh/svh ساخته شده و آدرس‌بار را هم حساب می‌کند).
+  try {
+    const d = getDoc();
+    const b = d && d.body;
+    if (b && b.clientWidth > 0 && b.clientHeight > 0) {
+      return { w: b.clientWidth, h: b.clientHeight, rotated: true };
+    }
+  } catch (_) {}
+  return { w: vh, h: vw, rotated: true };
+}
+
+/**
+ * تبدیلِ مختصاتِ لمس/ماوس (clientX/clientY فیزیکی) به مختصاتِ
+ * «منطقیِ» صفحهٔ چرخانده.
+ *
+ * css: `transform: rotate(90deg) translateY(-100%)` روی body یعنی
+ *      screen_x = W - y_local  و  screen_y = x_local
+ *      →  x_local = screen_y   و  y_local = W - screen_x
+ * @param {number} x
+ * @param {number} y
+ * @returns {{x:number, y:number}}
+ */
+export function mapPointToLogical(x, y) {
+  if (!isForcedLandscape()) return { x, y };
+  const w = getWin();
+  const physW = (w && (w.innerWidth || 0)) || 0;
+  return { x: y, y: physW - x };
+}
+
+/**
+ * تبدیلِ «جابه‌جایی» (movementX/Y یا اختلاف دو لمس) به دستگاهِ منطقی.
+ * @param {number} dx
+ * @param {number} dy
+ * @returns {{dx:number, dy:number}}
+ */
+export function mapDeltaToLogical(dx, dy) {
+  if (!isForcedLandscape()) return { dx, dy };
+  return { dx: dy, dy: -dx };
+}
+
 /**
  * ورود به تمام‌صفحه (async).
  * @param {HTMLElement} [preferredEl] - اگر داده نشود documentElement
@@ -276,11 +561,15 @@ export async function requestFullscreen(preferredEl) {
       if (p && typeof p.then === 'function') {
         await p;
       }
-      // اگر موفق بود، سعی کن portrait قفل کنی (مخصوص موبایل)
-      // تاخیر کوچک تا fullscreen اعمال شود (بعضی مرورگرها فقط بعد از fullscreen اجازه قفل می‌دهند)
+      // ✅ تمام‌صفحه شد → حالا جهتِ صفحه را «افقی» کن (مخصوص موبایل)
+      const orient = applyLandscape();
+      // بعضی مرورگرها چند لحظه بعد از fullscreen اجازهٔ قفلِ جهت می‌دهند
       setTimeout(() => {
-        tryLockPortrait();
-      }, 150);
+        applyLandscape().catch(() => {});
+      }, 250);
+      try {
+        await orient;
+      } catch (_) {}
       return { ok: true };
     } catch (e) {
       const name = e && e.name ? e.name : '';
@@ -312,8 +601,8 @@ export async function requestFullscreen(preferredEl) {
         } catch (_) {}
       }, 300);
     }
-    // باز هم سعی کن portrait قفل کنی
-    tryLockPortrait();
+    // ✅ شبه‌تمام‌صفحه هم باید افقی شود (دقیقاً همان‌جا که iOS می‌افتد)
+    applyLandscape().catch(() => {});
     return { ok: true, reason: 'pseudo' };
   } catch (_) {}
 
@@ -338,7 +627,7 @@ export async function exitFullscreen() {
       d.documentElement && d.documentElement.classList.remove('pseudo-fullscreen');
       d.body && d.body.classList.remove('pseudo-fullscreen');
     } catch (_) {}
-    await tryUnlockOrientation();
+    await releaseLandscape();
     return { ok: true };
   }
 
@@ -347,7 +636,7 @@ export async function exitFullscreen() {
   try {
     const p = fn();
     if (p && typeof p.then === 'function') await p;
-    await tryUnlockOrientation();
+    await releaseLandscape();
     return { ok: true };
   } catch (_) {
     return { ok: false };
@@ -394,7 +683,8 @@ export function toggleFullscreen() {
           document.documentElement.classList.add('pseudo-fullscreen');
           document.body.classList.add('pseudo-fullscreen');
           if (typeof window !== 'undefined') window.scrollTo(0, 1);
-          tryLockPortrait();
+          // ✅ حتی در شبه‌تمام‌صفحه هم جهت باید افقی شود
+          applyLandscape().catch(() => {});
           return { ok: true, action: 'enter', reason: 'pseudo' };
         }
       }
@@ -405,21 +695,21 @@ export function toggleFullscreen() {
     if (api.isFull()) {
       const p = api.exit();
       if (p && typeof p.catch === 'function') p.catch(() => {});
-      // unlock orientation async
-      tryUnlockOrientation();
+      // جهت را هم آزاد کن (چرخشِ CSS برداشته می‌شود)
+      releaseLandscape().catch(() => {});
       return { ok: true, action: 'exit' };
     }
     const p = api.enter();
     if (p && typeof p.catch === 'function') {
       p.catch(() => {});
-      // بعضی مرورگرها فقط بعد از resolve اجازه قفل می‌دهند
+      // بعضی مرورگرها فقط بعد از resolve اجازهٔ قفلِ جهت می‌دهند
       if (p.then) {
-        p.then(() => tryLockPortrait()).catch(() => {});
+        p.then(() => applyLandscape()).catch(() => {});
       } else {
-        tryLockPortrait();
+        applyLandscape().catch(() => {});
       }
     } else {
-      tryLockPortrait();
+      applyLandscape().catch(() => {});
     }
     return { ok: true, action: 'enter' };
   } catch (e) {
