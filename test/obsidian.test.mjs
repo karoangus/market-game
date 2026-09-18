@@ -20,7 +20,7 @@ if (typeof globalThis.localStorage === 'undefined') {
 }
 
 import { Engine, STAT_FA } from '../games/obsidian/js/engine.js';
-import { newState, saveGame, loadGame, clearSave, levelOf, XP_TABLE, gainXp, applyEffects } from '../games/obsidian/js/state.js';
+import { newState, saveGame, loadGame, clearSave, levelOf, XP_TABLE, gainXp, applyEffects, parseCond, parseEffect, checkCond } from '../games/obsidian/js/state.js';
 import { SCENES, ENDINGS } from '../games/obsidian/data/story.js';
 import { CHARS, charsAt } from '../games/obsidian/data/characters.js';
 import { ENEMIES, ENCOUNTERS } from '../games/obsidian/data/enemies.js';
@@ -132,6 +132,45 @@ const orphan = Object.keys(SCENES).filter(
   (id) => !reachable.has(id) && !SCENES[id].hook && !SCENES[id].job && !/^(talk_|q_)/.test(id)
 );
 check(orphan.length === 0, `صحنهٔ بی‌راه نداریم (${orphan.length}: ${orphan.slice(0, 4).join(', ')})`);
+
+{
+  // ⚠️ هر شرط و هر اثری که در دادهٔ داستان نوشته شده باید «قابل تجزیه» باشد.
+  //    نمونهٔ باگِ واقعی: شرطِ `item:shard2` (شناسهٔ آیتم با رقم) تجزیه نمی‌شد و
+  //    هنگام ورود به دروازهٔ برج سرخ استثنا می‌داد؛ یعنی بازیکنی که سخت‌ترین نبرد
+  //    داستان را برده بود، از راهِ پایان‌ها محروم می‌شد.
+  const badCond = [];
+  const badEff = [];
+  let conds = 0;
+  let effs = 0;
+  for (const [id, node] of Object.entries(SCENES)) {
+    const list = [];
+    if (node.if) list.push(node.if);
+    for (const w of node.when || []) if (w.if) list.push(w.if);
+    for (const c of node.choices || []) if (c.if) list.push(c.if);
+    for (const c of list) {
+      conds++;
+      try {
+        parseCond(c);
+      } catch (e) {
+        badCond.push(`${id}: ${c} → ${e.message}`);
+      }
+    }
+    for (const c of node.choices || [])
+      for (const e of c.do || []) {
+        effs++;
+        try {
+          parseEffect(e);
+        } catch (err) {
+          badEff.push(`${id}: ${e} → ${err.message}`);
+        }
+      }
+  }
+  check(conds > 30, `شرط‌های داستان بررسی شد (${conds})`);
+  check(badCond.length === 0, `همهٔ شرط‌های داستان تجزیه می‌شوند (${badCond.slice(0, 3).join(' | ')})`);
+  check(effs > 150, `اثرهای داستان بررسی شد (${effs})`);
+  check(badEff.length === 0, `همهٔ اثرهای داستان تجزیه می‌شوند (${badEff.slice(0, 3).join(' | ')})`);
+  check(checkCond(newState({ inv: { shard2: 1 } }), 'item:shard2') === true, 'شرط آیتم با رقم در شناسه کار می‌کند');
+}
 
 // ---------------------------------------------------------------
 section('موتور بازی');
@@ -432,6 +471,30 @@ section('گشتِ خودکار در بازی');
   }
   check(seen.size > 60, `گراف داستان پیمایش‌شدنی است (${seen.size} صحنه از آغاز دیدنی است)`);
   check(reachedEnd, 'از آغاز داستان، پایان در دسترس است');
+}
+
+{
+  // پایان‌ها باید «رسیدنی» باشند: کسی که نبرد آخر را برده و سنگ دوم را
+  // برداشته، باید بتواند از دروازهٔ برج سرخ بالا برود و به یک پایان برسد.
+  const st = newState({ name: 'راه‌رو' });
+  Object.assign(st, { chapter: 6, location: 'borj_sorkh', day: 30, level: 7, hpMax: 66, hp: 66, energyMax: 18, energy: 18 });
+  st.flags = { tower_open: 1 };
+  st.inv = { shard: 1, shard2: 1 };
+  const eng = Engine.start({ state: st });
+  const pick = (pred) => {
+    const v = eng.view();
+    const i = (v.choices || []).findIndex(pred);
+    if (i >= 0) eng.choose(i);
+    return i >= 0;
+  };
+  eng.enter('ch6_gate');
+  check(pick((c) => c.choice && c.choice.to === 'ch6_gate_open'), 'درِ برج با سنگِ دوم باز می‌شود');
+  check(pick((c) => c.choice && c.choice.to === 'ch6_tower'), 'از دروازه بالا می‌رویم');
+  check(pick((c) => c.choice && c.choice.to === 'ch6_final'), 'به بالای برج و انتخابِ آخر می‌رسیم');
+  check(pick((c) => c.choice && c.choice.to === 'end_crown'), 'انتخابِ آخر به یک پایان می‌رسد');
+  const endView = eng.view();
+  check(endView.type === 'end', 'نمای پایانی ساخته می‌شود');
+  check(eng.state.endings.includes('end_crown'), 'پایان در کارنامهٔ بازیکن ثبت می‌شود');
 }
 
 {

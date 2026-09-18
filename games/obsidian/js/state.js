@@ -83,7 +83,9 @@ export function parseCond(src) {
     return (st) => !!st.visited[k];
   }
   if (s.startsWith('item:')) {
-    const m = s.slice(5).match(/^([a-z_]+)(>=(\d+))?$/);
+    // ⚠️ شناسهٔ آیتم می‌تواند رقم داشته باشد (`shard2`)؛ بدون ۰-۹ این شرط
+    //    استثنا می‌داد و راهِ برج سرخ — یعنی راهِ پایان‌ها — می‌بست.
+    const m = s.slice(5).match(/^([a-z_0-9]+)(>=(\d+))?$/);
     if (!m) throw new Error('شرط نامعتبر: ' + s);
     const id = m[1];
     const n = m[3] ? +m[3] : 1;
