@@ -42,6 +42,7 @@ import {
 import * as ui from './ui.js';
 import { sfx } from './sound.js';
 import { fa } from './util.js';
+import { toggleFullscreen } from './fullscreen.js';
 
 let renderer = null;
 let scene = null;
@@ -70,6 +71,7 @@ function init() {
     resetView,
     showInfo,
     toggleSound,
+    toggleFullscreen: toggleFs,
     refreshSupplier: () => state && ui.refreshSupplier(state),
     refreshPricing: () => state && ui.refreshPricing(state),
   });
@@ -84,6 +86,23 @@ function init() {
 
   // نشانهٔ «بازی بالا آمد» برای watchdog در index.html
   window.__MG_READY__ = true;
+}
+
+/**
+ * تغییر حالت تمام‌صفحه. اگر مرورگر API نداشته باشد (iOS قدیم)،
+ * به‌جای دکمهٔ مرده، راهنمای مفید می‌دهیم.
+ */
+function toggleFs() {
+  const r = toggleFullscreen();
+  if (r.ok) {
+    sfx.click();
+  } else {
+    ui.toast(
+      '⛶ مرورگرت نمایش تمام‌صفحه را مستقیم نمی‌پذیرد — از دکمهٔ تمام‌صفحهٔ خودِ مرورگر استفاده کن یا بازی را نصب کن',
+      'warn',
+      4600
+    );
+  }
 }
 
 /**
@@ -127,6 +146,9 @@ function initEngine() {
       onInteract: handleInteract,
       formatAim: aimHintText,
     });
+    // FOV اولیه بر اساس جهت‌گیری فعلی صفحه (در حالت عمودی پهن‌تر)
+    fps.setAspect(camera.aspect);
+
     // بدنِ بازیکن برای مشتری‌ها هم وجود دارد: دورت می‌چرخند، ازت رد نمی‌شوند
     world.playerObstacle = { pos: fps.pos, radius: PLAYER_RADIUS, active: false };
     return true;
@@ -188,6 +210,8 @@ function onResize() {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  // چرخش گوشی/بازشدن پنجره → FOV پایه به‌روز می‌شود (حالت عمودی = دید پهن‌تر)
+  if (fps) fps.setAspect(camera.aspect);
 }
 
 // ---------- داستان روز ----------

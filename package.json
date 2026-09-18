@@ -5,10 +5,11 @@
   "description": "سوپرمارکت من — بازی سه‌بعدی مدیریت سوپرمارکت (Three.js خالص، بدون build step)",
   "type": "module",
   "scripts": {
-    "test": "node test/economy.test.mjs && node test/nav.test.mjs && node test/fps.test.mjs && node test/boot.test.mjs && node test/obsidian.test.mjs && node test/borj.test.mjs && node test/borj_ui.test.mjs",
+    "test": "node test/economy.test.mjs && node test/nav.test.mjs && node test/fps.test.mjs && node test/fullscreen.test.mjs && node test/boot.test.mjs && node test/obsidian.test.mjs && node test/borj.test.mjs && node test/borj_ui.test.mjs",
     "test:economy": "node test/economy.test.mjs",
     "test:nav": "node test/nav.test.mjs",
     "test:fps": "node test/fps.test.mjs",
+    "test:fullscreen": "node test/fullscreen.test.mjs",
     "test:boot": "node test/boot.test.mjs",
     "serve": "python3 -m http.server 8000 --bind 0.0.0.0",
     "test:obsidian": "node test/obsidian.test.mjs",
