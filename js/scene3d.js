@@ -29,6 +29,7 @@ import {
 import { NavGrid } from './nav.js';
 import { buildPerson, BASKET_SLOTS } from './person.js';
 import { Tweens, easeOutCubic, easeOutBack, clamp01, arcLerp, lerp } from './anim.js';
+import { sampleSkyPhase } from './sky.js';
 
 // سازگاری با کدهای قبلی (main.js و customers.js این‌ها را می‌خواستند)
 export { ROOM, DOOR, buildPerson };
@@ -217,16 +218,21 @@ function buildRoom(world) {
   s.add(floor);
 
   // ---- نورهای سقفی ----
+  // متریال پنل‌ها «مشترک» است (همهٔ ۴ پنل یک متریال از کش می‌گیرند)؛
+  // world.ceilingMat نگهش می‌داریم تا چرخهٔ شبانه‌روز (sky.js) شدت
+  // تابش‌شان را شب‌ها زیاد و روز کم کند — بدون هیچ رندر اضافه.
+  const panelMat = mat(0xffffff, { emissive: 0xfff3d6, emissiveIntensity: 1.1, roughness: 0.4 });
   for (const [lx, lz] of [
     [-1.2, -0.9],
     [1.2, -0.9],
     [-1.2, 0.9],
     [1.2, 0.9],
   ]) {
-    const panel = box(1.1, 0.05, 0.5, mat(0xffffff, { emissive: 0xfff3d6, emissiveIntensity: 1.1, roughness: 0.4 }), lx, h - 0.03, lz);
+    const panel = box(1.1, 0.05, 0.5, panelMat, lx, h - 0.03, lz);
     panel.castShadow = false;
     s.add(panel);
   }
+  world.ceilingMat = panelMat;
   for (const bz of [-1.2, 0.4]) s.add(box(w, 0.12, 0.1, mat(0xd8dee4), 0, h - 0.08, bz));
 
   // ---- سقف ----
@@ -1008,12 +1014,14 @@ function buildOutside(world) {
   bench.position.set(DOOR.x + 2.6, 0, ROOM.d / 2 + 1.05);
   s.add(bench);
 
-  // آسمان (گرادیان)
+  // آسمان (گرادیان) — بافت عمداً «خاکستری» است؛ رنگ واقعی آسمان را
+  // چرخهٔ شبانه‌روز (applySky) روی material.color می‌نویسد: صبح آبی،
+  // غروب نارنجی، شب سرمه‌ای — بدون هیچ بافت یا درا-کالِ اضافه.
   const skyTex = canvasTex(4, 256, (x, w, h) => {
     const g = x.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, '#5fa8dd');
-    g.addColorStop(0.55, '#a8d3ee');
-    g.addColorStop(1, '#e8f2f7');
+    g.addColorStop(0, '#c9ced2'); // سرِ آسمان کمی تیره‌تر (طبیعی‌تر)
+    g.addColorStop(0.55, '#eceff1');
+    g.addColorStop(1, '#ffffff'); // افق روشن‌ترین
     x.fillStyle = g;
     x.fillRect(0, 0, w, h);
   });
@@ -1023,7 +1031,9 @@ function buildOutside(world) {
       new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide, fog: false, toneMapped: false })
     );
     sky.position.y = 6;
+    sky.material.color.set(0xa7d7f2); // رنگ اولیه: صبح
     s.add(sky);
+    world.skyMesh = sky;
   }
   // ساختمان‌های دور
   for (let i = 0; i < 7; i++) {
@@ -1456,6 +1466,17 @@ export function createWorld(scene, opts = {}) {
   world.setDoor = (open) => {
     world.doorTarget = open ? 1 : 0;
   };
+  // چرخهٔ شبانه‌روز: k=۰ یعنی ۹ صبح، k=۱ یعنی ۲۱ شب. تغییرِ ریز
+  // (کمتر از ۰٫۳٪ روز) اعمال نمی‌شود تا CPU هر فریم بی‌دلیل کار نکند.
+  world._skyK = -1;
+  world._skyW = '';
+  world.setSky = (k, weather = 'sun') => {
+    const kk = clamp01(typeof k === 'number' && isFinite(k) ? k : 0);
+    if (Math.abs(kk - world._skyK) < 0.003 && weather === world._skyW) return;
+    world._skyK = kk;
+    world._skyW = weather;
+    applySky(world, kk, weather);
+  };
   if (document.fonts && document.fonts.ready)
     document.fonts.ready.then(() => world.redrawText()).catch(() => {});
   world.update = (dt) => updateWorld(world, dt);
@@ -1473,6 +1494,30 @@ function setWeather(world, kind) {
   }
   if (world.clouds) world.clouds.visible = kind !== 'sun';
   if (world.birds) world.birds.visible = kind === 'sun';
+}
+
+// ---------- چرخهٔ شبانه‌روز (صبح → غروب → شب) ----------
+const _skyColor = new THREE.Color();
+const _sunColor = new THREE.Color();
+function applySky(world, k, weather) {
+  if (!world || world.headless) return;
+  const s = sampleSkyPhase(k, weather);
+  _skyColor.setRGB(s.sky[0], s.sky[1], s.sky[2]);
+  _sunColor.setRGB(s.sun[0], s.sun[1], s.sun[2]);
+  if (world.scene.background && world.scene.background.isColor) world.scene.background.copy(_skyColor);
+  if (world.scene.fog && world.scene.fog.color) world.scene.fog.color.copy(_skyColor);
+  const L = world.lights;
+  if (L) {
+    if (L.dir) {
+      L.dir.color.copy(_sunColor);
+      L.dir.intensity = s.sunI;
+    }
+    if (L.hemi) L.hemi.intensity = s.hemiI;
+    if (L.inner) L.inner.intensity = 6 + s.inI * 6; // شب‌ها چراغ داخل گرم‌تر
+  }
+  if (world.ceilingMat) world.ceilingMat.emissiveIntensity = 0.55 + s.inI * 0.75;
+  if (world.skyMesh && world.skyMesh.material && world.skyMesh.material.color)
+    world.skyMesh.material.color.copy(_skyColor);
 }
 
 /**
@@ -1514,6 +1559,7 @@ export function createHeadlessWorld(opts = {}) {
   world.redrawText = () => {};
   world.setWeather = () => {};
   world.setDoor = () => {};
+  world.setSky = () => {};
   return world;
 }
 

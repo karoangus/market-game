@@ -195,7 +195,10 @@ async function bootGame(opts = {}) {
   Math.random = mulberry32(20260916);
 
   // ماژول‌های واقعی بازی — بدون cache تا هر boot مستقل باشد
-  const stamp = `${Date.now()}-${Math.random()}`;
+  // ⚠️ stamp باید با random «واقعی» ساخته شود؛ اگر از Math.randomِ
+  // seed شده استفاده کنیم، همهٔ bootها stamp یکسان می‌گیرند و ماژول‌های
+  // boot دوم از کشِ ماژول boot اول می‌آیند (نه مستقل).
+  const stamp = `${Date.now()}-${realRandom()}`;
   const quiet = console.warn; // هشدارهای سه‌بعدی عمدی‌اند؛ خروجی تست شلوغ نشود
   console.warn = () => {};
   let bootError = null;
@@ -250,7 +253,7 @@ console.log('۲) بدون WebGL هم بازی شروع می‌شود (نه دک�
   await g.tick(60);
   check(g.$('start-screen').classList.contains('hidden'), 'صفحهٔ شروع کنار رفت (قبلاً اینجا گیر می‌کرد)');
   check(!g.$('hud').classList.contains('hidden'), 'HUD نمایش داده شد');
-  check(g.$('money-val').textContent === '۱۰۰ $', 'سرمایه ۱۰۰ دلار است');
+  check(g.$('money-val').textContent === '۱۰۰ $', `سرمایه ۱۰۰ دلار است [dbg=${g.$('money-val').textContent}]`);
   check(!!g.window.document.getElementById('engine-error'), 'هشدار «گرافیک سه‌بعدی در دسترس نیست» نمایش داده شد');
 }
 

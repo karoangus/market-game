@@ -13,6 +13,7 @@ import * as THREE from 'three';
 import { PRODUCTS, GAME } from './config.js';
 import { rollMarketPrices } from './economy.js';
 import { newGameState, saveGame, loadGame, hasSave, clearSave, freshDayStats } from './state.js';
+import { clamp01 } from './anim.js';
 import {
   createWorld,
   createHeadlessWorld,
@@ -41,6 +42,7 @@ import {
 } from './story.js';
 import * as ui from './ui.js';
 import { sfx } from './sound.js';
+import { PerfMonitor } from './perf.js';
 import { fa } from './util.js';
 import {
   toggleFullscreenAsync,
@@ -65,6 +67,8 @@ let phase = 'menu'; // menu | prep | running | report
 let sim = null;
 let story = { weather: WEATHERS.sun, event: null };
 let playerNearDoor = false;
+let perfMon = null; // کیفیت تطبیقی رندر (روانی روی گوشی ضعیف)
+let lastVibe = 0; // جلوگیری از لرزش‌های پشت‌سرهم
 const clock = new THREE.Clock();
 
 init();
@@ -76,6 +80,7 @@ function init() {
     continueGame,
     restart,
     buy,
+    fillShelf,
     setPrice,
     startDay,
     nextDay,
@@ -230,8 +235,10 @@ function initEngine() {
     // می‌شود و زد-فایتینگِ بافت‌ها از بین می‌رود.
     camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.08, 130);
 
-    buildLights(scene);
+    // نورها به دنیا وصل می‌شوند تا چرخهٔ شبانه‌روز (sky.js) بتواند
+    // شدت و رنگ‌شان را ساعت به ساعت عوض کند
     world = createWorld(scene);
+    world.lights = buildLights(scene);
     world.setDoor(false);
 
     // کنترل اول‌شخص: WASD/جوی‌استیک، نگاه با ماوس/لمس، کراس‌هیر و تعامل
@@ -248,6 +255,19 @@ function initEngine() {
 
     // بدنِ بازیکن برای مشتری‌ها هم وجود دارد: دورت می‌چرخند، ازت رد نمی‌شوند
     world.playerObstacle = { pos: fps.pos, radius: PLAYER_RADIUS, active: false };
+
+    // کیفیت تطبیقی: اگر فریم‌ها سنگین شدند، رزولوشن رندر خودکار کم
+    // می‌شود (تا ۶۰٪) و وقتی صحنه سبک شد برمی‌گردد — بازی هیچ‌وقت
+    // نمی‌پرد و روی گوشی ضعیف هم لغزنده می‌ماند.
+    perfMon = new PerfMonitor({
+      baseRatio: Math.min(window.devicePixelRatio || 1, 2),
+      onChange: (r) => {
+        if (renderer) {
+          renderer.setPixelRatio(r.ratio);
+          if (r.firstDown) ui.toast('⚡ حالت روان فعال شد تا بازی لغزنده بماند', 'info', 2600);
+        }
+      },
+    });
     return true;
   } catch (err) {
     // هر خطایی اینجا افتاد: رندر را خاموش کن ولی بازی را نگه دار
@@ -255,6 +275,7 @@ function initEngine() {
     scene = null;
     camera = null;
     fps = null;
+    perfMon = null;
     world = createHeadlessWorld();
     console.warn('[market-game] موتور سه‌بعدی بالا نیامد — حالت بدون گرافیک فعال شد:', err);
     ui.showEngineError(err);
@@ -324,6 +345,9 @@ function ensureDayStory(force = false) {
   if (!state) return story;
   if (!force && state.storyDay === state.day && state.quest) {
     story = { weather: WEATHERS[state.weather] || WEATHERS.sun, event: story.event };
+    // 🐛 باگ: موقع «ادامهٔ بازی»، هوا فقط در داستان بود ولی صحنه هرگز
+    // setWeather نمی‌گرفت — باران/برفِ روزِ ذخیره‌شده دیده نمی‌شد.
+    if (world && world.setWeather) world.setWeather(story.weather.id);
     return story;
   }
   const weather = rollWeather(state.day);
@@ -341,9 +365,11 @@ function enterGame(msg) {
   ui.hideStartScreen(); // صفحهٔ شروع کنار می‌رود تا بازی دیده شود
   ui.showHud();
   ensureDayStory();
+  if (world && world.setSky) world.setSky(0, story.weather ? story.weather.id : 'sun'); // صبح
   ui.setHud(state);
   ui.setSound(state.sound !== false);
   sfx.setMuted(state.sound === false);
+  sfx.setMusic(state.sound !== false); // موسیقی محیطی با وضعیت صدا سینک می‌ماند
   ui.setQuest(state.quest, state.dayStats);
   refreshShelves(world, state.inventory);
   refreshTags(world, state.salePrice, state.market);
@@ -385,7 +411,9 @@ function restart() {
 
 // ---------- خرید از تأمین‌کننده ----------
 function buy(id, n) {
-  if (!state || phase !== 'prep' || n < 1) return false;
+  // خرید در «prep» (قبل از باز شدن) و «report» (بعد از بستن صندوق —
+  // بارگیریِ شبانه) ممکن است؛ فقط وسطِ روز نه.
+  if (!state || (phase !== 'prep' && phase !== 'report') || n < 1) return false;
   const p = PRODUCTS.find((x) => x.id === id);
   const cost = state.market[id] * n;
   if (state.money < cost) {
@@ -404,6 +432,34 @@ function buy(id, n) {
   return true;
 }
 
+/**
+ * «پر کردن قفسه» — تا سقف نمایش قفسه (۱۲ عدد) با یک ضربه جنس بخر.
+ * اگر پول کم بود، هرچقدر که شد می‌خرد و می‌گوید.
+ * @returns {boolean} آیا خریدی انجام شد؟
+ */
+function fillShelf(id) {
+  if (!state || (phase !== 'prep' && phase !== 'report')) return false;
+  const cap = GAME.maxDisplayPerShelf;
+  const want = cap - (state.inventory[id] || 0);
+  const p = PRODUCTS.find((x) => x.id === id);
+  if (want <= 0) {
+    ui.toast(`${p.emoji} قفسهٔ ${p.name} همین حالا پر است`, 'info');
+    return false;
+  }
+  const affordable = Math.floor(state.money / state.market[id]);
+  const n = Math.min(want, affordable);
+  if (n < 1) {
+    ui.toast(`💸 پولِ حتی یک «${p.name}» هم کافی نیست`, 'warn');
+    sfx.error();
+    return false;
+  }
+  const ok = buy(id, n);
+  if (ok && n < want) {
+    ui.toast(`🧾 فقط ${fa(n)} از ${fa(want)} عدد شد — پول کم بود`, 'warn', 3200);
+  }
+  return ok;
+}
+
 // ---------- قیمت‌گذاری ----------
 function setPrice(id, delta) {
   if (!state || phase === 'running') return;
@@ -419,14 +475,16 @@ function setPrice(id, delta) {
 function toggleSound() {
   if (!state) return;
   state.sound = state.sound === false;
-  sfx.setMuted(state.sound === false);
+  const on = state.sound !== false;
+  sfx.setMuted(!on); // خاموشیِ صدا = mute
+  sfx.setMusic(on); // موسیقی هم با همان دکمهٔ صدا روشن/خاموش می‌شود
   ui.setSound(state.sound);
   saveGame(state);
 }
 
 function showInfo() {
   if (!state) return;
-  ui.showStoreInfo(state, { tips: buildTips() });
+  ui.showStoreInfo(state, { tips: buildTips(), quality: perfMon ? perfMon.label : '' });
 }
 
 /** راهنمایی‌های ساده و واقعی بر اساس وضعیت فعلی فروشگاه */
@@ -467,6 +525,16 @@ function startDay() {
           floatText(world, `+${Math.round(rev)} $`, REGISTER_POS, { color: '#ffe066' });
         }
         ui.flashNews(liveLine('sale', { n: items, rev: Math.round(rev) }));
+        // بازخورد لمسی خیلی ظریف هنگام فروش (موبایل) — حداکثر هر ۲٫۵ ثانیه
+        if (typeof navigator !== 'undefined' && navigator.vibrate && state.sound !== false) {
+          const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+          if (now - lastVibe > 2500) {
+            lastVibe = now;
+            try {
+              navigator.vibrate(12);
+            } catch (_) {}
+          }
+        }
       },
       onEnter: (c) => {
         if (sim && sim.stats.customers % 2 === 1) ui.flashNews(liveLine('enter'));
@@ -603,6 +671,17 @@ function animate() {
   }
 
   if (world) world.update(dt);
+  // چرخهٔ شبانه‌روز: پیشرفتِ ساعتِ فروشگاه (۹→۲۱) آسمان و نورها را
+  // عوض می‌کند — صبح آبی، عصر طلایی، شب سرمه‌ای با چراغ‌های روشن‌تر.
+  if (world && world.setSky) {
+    const dayK = sim ? clamp01(sim.time / sim.expected) : 0;
+    world.setSky(dayK, story.weather ? story.weather.id : 'sun');
+  }
+  // کیفیت تطبیقی رندر — با EMA فریم‌تایم تصمیم می‌گیرد
+  if (perfMon) {
+    perfMon.push(dt);
+    perfMon.tick(typeof performance !== 'undefined' ? performance.now() : 0);
+  }
   if (sim) {
     sim.update(dt);
     if (sim) {

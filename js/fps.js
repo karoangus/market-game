@@ -392,6 +392,10 @@ export class FirstPerson {
         ox: Math.max(66, Math.min(w - 66, p.x)),
         oy: Math.max(66, Math.min(h - 66, p.y)),
       };
+      // باگ قدیمی: دستگیره از موقعیتِ لمسِ قبلی جداش می‌پرید — حالا هر
+      // لمسِ جدید از مرکزِ تازه شروع می‌شود
+      const knob = this.elJoy && this.elJoy.querySelector('#fp-joy-knob');
+      if (knob && knob.style) knob.style.transform = 'translate(0px, 0px)';
       this._tipDismissed = true;
     } else if (!this._look) {
       this._look = { id: e.pointerId, lx: p.x, ly: p.y, moved: 0, t0: Date.now() };

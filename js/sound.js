@@ -8,6 +8,127 @@ let ctx = null;
 let master = null;
 let muted = false;
 
+// ---------- موسیقی محیطی (پروسیجرال، بدون هیچ فایل صوتی) ----------
+// یک لوپ lo-fi آرام: پدِ نرم + بیس + نُت‌های پراکنده. فقط چند
+// نوسان‌ساز سبک — هزینهٔ CPU ناچیز است و هیچ دانلودی ندارد.
+let musicGain = null;
+let musicOn = false;
+let musicTimer = null;
+let musicBar = 0;
+let musicNextBar = 0;
+
+const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+// آکوردها: Am9 → Fmaj7 → Cmaj7 → G6 (لایهٔ بیس جدا)
+const CHORDS = [
+  { bass: 45, tones: [57, 60, 64, 71], scale: [69, 72, 76, 79, 83] },
+  { bass: 41, tones: [53, 57, 60, 64], scale: [65, 69, 72, 77, 81] },
+  { bass: 48, tones: [55, 60, 64, 71], scale: [72, 76, 79, 83, 86] },
+  { bass: 43, tones: [55, 59, 62, 66], scale: [67, 71, 74, 79, 81] },
+];
+const BAR_SEC = 60 / 72 / 2 * 8; // ۸ ضربِ هشتم در ۷۲ BPM ≈ ۳٫۳ ثانیه
+
+function padVoice(freq, t0, dur, vol) {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  const f = ctx.createBiquadFilter();
+  o.type = 'triangle';
+  o.frequency.value = freq;
+  o.detune.value = (Math.random() * 2 - 1) * 4;
+  f.type = 'lowpass';
+  f.frequency.value = 950;
+  f.Q.value = 0.4;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(vol, t0 + dur * 0.35);
+  g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(f);
+  f.connect(g);
+  g.connect(musicGain);
+  o.start(t0);
+  o.stop(t0 + dur + 0.05);
+}
+
+function pluckVoice(freq, t0, vol) {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t0);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.5);
+  o.connect(g);
+  g.connect(musicGain);
+  o.start(t0);
+  o.stop(t0 + 0.55);
+}
+
+function bassVoice(freq, t0, dur, vol) {
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.type = 'sine';
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.linearRampToValueAtTime(vol, t0 + 0.06);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g);
+  g.connect(musicGain);
+  o.start(t0);
+  o.stop(t0 + dur + 0.05);
+}
+
+/** برنامه‌ریزی یک میزان کامل در زمان t0 (absolute AudioContext time) */
+function scheduleBar(t0) {
+  const ch = CHORDS[musicBar % CHORDS.length];
+  musicBar++;
+  const eighth = BAR_SEC / 8;
+  // پد آکورد — نرم در میزان می‌نشیند
+  for (const m of ch.tones) padVoice(mtof(m), t0, BAR_SEC * 1.05, 0.022);
+  // بیس: ضرب ۱ و ۵ (شاید ۷ هم، با شانس کم)
+  bassVoice(mtof(ch.bass), t0, eighth * 3.4, 0.05);
+  bassVoice(mtof(ch.bass + 7), t0 + eighth * 4, eighth * 3.2, 0.035);
+  // ملودی پراکنده: روی بعضی هشتم‌ها یک نت پنتاتونیک
+  for (let i = 0; i < 8; i++) {
+    if (Math.random() < 0.22) {
+      const n = ch.scale[Math.floor(Math.random() * ch.scale.length)];
+      pluckVoice(mtof(n), t0 + i * eighth + (Math.random() < 0.3 ? eighth * 0.5 : 0), 0.026);
+    }
+  }
+}
+
+function musicTick() {
+  if (!ctx || !musicOn || muted) return;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+    return;
+  }
+  const ahead = 1.4;
+  if (musicNextBar < ctx.currentTime) musicNextBar = ctx.currentTime + 0.1;
+  while (musicNextBar < ctx.currentTime + ahead) {
+    scheduleBar(musicNextBar);
+    musicNextBar += BAR_SEC;
+  }
+}
+
+function startMusic() {
+  if (musicOn || !ensure()) return;
+  musicOn = true;
+  if (!musicGain) {
+    musicGain = ctx.createGain();
+    musicGain.gain.value = 0.9;
+    musicGain.connect(master || ctx.destination);
+  }
+  musicBar = 0;
+  musicNextBar = 0;
+  musicTick();
+  musicTimer = setInterval(musicTick, 500);
+}
+
+function stopMusic() {
+  musicOn = false;
+  if (musicTimer) {
+    clearInterval(musicTimer);
+    musicTimer = null;
+  }
+}
+
 function ensure() {
   if (!ctx) {
     try {
@@ -93,6 +214,17 @@ export const sfx = {
   },
   get muted() {
     return muted;
+  },
+  /** موسیقی محیطی: روشن/خاموش (فقط وقتی صدا هم خاموش نباشد می‌نوازد) */
+  setMusic(on) {
+    if (on) {
+      if (!muted) startMusic();
+    } else {
+      stopMusic();
+    }
+  },
+  get musicOn() {
+    return musicOn;
   },
   /** کلیک عمومی */
   click() {
