@@ -1,11 +1,14 @@
 {
   "name": "market-game",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "private": true,
   "description": "سوپرمارکت من — بازی سه‌بعدی مدیریت سوپرمارکت (Three.js خالص، بدون build step)",
   "type": "module",
   "scripts": {
-    "test": "node test/economy.test.mjs && node test/nav.test.mjs && node test/fps.test.mjs && node test/fullscreen.test.mjs && node test/boot.test.mjs && node test/obsidian.test.mjs && node test/borj.test.mjs && node test/borj_ui.test.mjs",
+    "test": "node test/economy.test.mjs && node test/nav.test.mjs && node test/fps.test.mjs && node test/fullscreen.test.mjs && node test/boot.test.mjs && node test/scene.test.mjs && node test/obsidian.test.mjs && node test/borj.test.mjs && node test/borj_ui.test.mjs && node test/perf.test.mjs && node test/sky.test.mjs",
+    "test:perf": "node test/perf.test.mjs",
+    "test:sky": "node test/sky.test.mjs",
+    "test:scene": "node test/scene.test.mjs",
     "test:economy": "node test/economy.test.mjs",
     "test:nav": "node test/nav.test.mjs",
     "test:fps": "node test/fps.test.mjs",

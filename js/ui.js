@@ -73,6 +73,16 @@ export function isBlocking() {
 }
 
 // ---------- HUD ----------
+// ⚡ تغییر-تشخیص: HUD قبلاً هر فریم innerHTML/textContent می‌نوشت
+// (۶۰ بار در ثانیه!) و روی موبایل جریان ثابتِ layout/GC می‌ساخت.
+// حالا فقط وقتی مقدار واقعاً عوض شود DOM به‌روز می‌شود. کش روی خودِ
+// المنت نگه داشته می‌شود (نه ماژول) تا با تعویض DOM هم درست بماند.
+function setText(el, txt) {
+  if (!el || el._mgTxt === txt) return;
+  el._mgTxt = txt;
+  el.textContent = txt;
+}
+
 export function showHud() {
   $('hud').classList.remove('hidden');
 }
@@ -86,10 +96,10 @@ export function hideStartScreen() {
 }
 
 export function setHud(state) {
-  $('hud-day').textContent = `📅 روز ${fa(state.day)}`;
-  $('money-val').textContent = money(state.money);
+  setText($('hud-day'), `📅 روز ${fa(state.day)}`);
+  setText($('money-val'), money(state.money));
   const info = levelInfo(state.xp || 0);
-  $('hud-level').textContent = `⭐ سطح ${fa(info.level)}`;
+  setText($('hud-level'), `⭐ سطح ${fa(info.level)}`);
 }
 
 export function bumpMoney(rev) {
@@ -101,17 +111,17 @@ export function bumpMoney(rev) {
   setTimeout(() => el.remove(), 1000);
 }
 
-/** ساعت فروشگاه + هوا */
+/** ساعت فروشگاه + هوا — فقط وقتی عوض شود DOM می‌نویسد */
 export function setClock(text, weatherEmoji) {
-  const el = $('hud-weather');
-  if (el) el.textContent = `${weatherEmoji} ${fa(text)}`;
+  setText($('hud-weather'), `${weatherEmoji} ${fa(text)}`);
 }
 
 /** چند مشتری داخل فروشگاه و چند نفر در صف */
 export function setLive(inside, queue) {
-  const el = $('hud-live');
-  if (!el) return;
-  el.textContent = queue > 0 ? `🛍️ ${fa(inside)} نفر داخل · ${fa(queue)} نفر در صف` : `🛍️ ${fa(inside)} نفر داخل فروشگاه`;
+  setText(
+    $('hud-live'),
+    queue > 0 ? `🛍️ ${fa(inside)} نفر داخل · ${fa(queue)} نفر در صف` : `🛍️ ${fa(inside)} نفر داخل فروشگاه`
+  );
 }
 
 export function setRunning(on) {
@@ -124,8 +134,21 @@ export function setRunning(on) {
 }
 
 export function setProgress(done, total) {
-  $('progress-label').textContent = `مشتری‌ها: ${fa(done)} از ${fa(total)}`;
-  $('progress-fill').style.width = pct(done / Math.max(1, total));
+  // نوشتن متن/عرض فقط وقتی مقدار واقعاً عوض شود (کش روی خود المنت)
+  const doneI = Math.round(done);
+  const totalI = Math.round(total);
+  const lbl = $('progress-label');
+  if (lbl && (lbl._mgDone !== doneI || lbl._mgTotal !== totalI)) {
+    lbl._mgDone = doneI;
+    lbl._mgTotal = totalI;
+    lbl.textContent = `مشتری‌ها: ${fa(doneI)} از ${fa(totalI)}`;
+  }
+  const fill = $('progress-fill');
+  const w = pct(done / Math.max(1, total));
+  if (fill && fill._mgW !== w) {
+    fill._mgW = w;
+    fill.style.width = w;
+  }
 }
 
 /** نوار خبر کوتاه (پایین HUD) */
@@ -141,16 +164,22 @@ export function flashNews(text) {
   el._t = setTimeout(() => el.classList.add('hidden'), 4200);
 }
 
-/** چیپ مأموریت امروز */
+/** چیپ مأموریت امروز — innerHTML فقط با تغییر پیشرفت (نه هر فریم!) */
 export function setQuest(quest, stats) {
   const el = $('hud-quest');
   if (!el) return;
   if (!quest) {
-    el.classList.add('hidden');
+    if (el._mgQ !== null) {
+      el._mgQ = null;
+      el.classList.add('hidden');
+    }
     return;
   }
   const p = questProgress(quest, stats || {});
   const done = p >= quest.target;
+  const key = `${quest.id}|${quest.target}|${p}|${done ? 1 : 0}`;
+  if (el._mgQ === key) return;
+  el._mgQ = key;
   el.classList.remove('hidden');
   el.classList.toggle('done', done);
   el.innerHTML = `<span class="q-emoji">${quest.emoji}</span>
@@ -266,6 +295,7 @@ export function refreshSupplier(state) {
     const q = qty[p.id] || 1;
     const cost = q * state.market[p.id];
     const have = state.inventory[p.id] || 0;
+    const missing = Math.max(0, GAME.maxDisplayPerShelf - have);
     return `
     <div class="row">
       <div class="row-icon">${p.emoji}</div>
@@ -281,7 +311,14 @@ export function refreshSupplier(state) {
         <span class="qty" id="qty-${p.id}">${fa(q)}</span>
         <button class="step" data-sup="step" data-id="${p.id}" data-d="1">+</button>
       </div>
-      <button class="buy-btn" data-sup="buy" data-id="${p.id}">خرید</button>
+      <div class="buy-col">
+        <button class="buy-btn" data-sup="buy" data-id="${p.id}">خرید</button>
+        ${
+          missing > 0
+            ? `<button class="fill-btn" data-sup="fill" data-id="${p.id}" title="خرید تا سقف قفسه (${fa(missing)} عدد)">🧺 ${fa(missing)} تا</button>`
+            : '<span class="fill-full">✔ پر است</span>'
+        }
+      </div>
     </div>`;
   }).join('');
 }
@@ -369,6 +406,7 @@ export function showStoreInfo(state, ctx = {}) {
         <div class="rep-item"><small>سرمایهٔ فعلی</small><b>${money(state.money)}</b></div>
         <div class="rep-item"><small>روز فعلی</small><b>${fa(state.day)}</b></div>
       </div>
+      ${ctx.quality ? `<small class="quality-line">⚡ کیفیت رندر: ${ctx.quality} (خودکار — برای روان ماندن بازی)</small>` : ''}
     </div>
     ${
       tips.length
@@ -550,6 +588,10 @@ export function initUI(hooks) {
         qty[id] = 1;
         cb.refreshSupplier && cb.refreshSupplier();
       }
+    } else if (b.dataset.sup === 'fill') {
+      // «پر کردن قفسه» با یک ضربه — تا سقف نمایش (یا تا جایی که پول بدهد)
+      const ok = cb.fillShelf && cb.fillShelf(id);
+      if (ok) cb.refreshSupplier && cb.refreshSupplier();
     }
   });
 

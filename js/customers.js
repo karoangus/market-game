@@ -521,14 +521,18 @@ class CustomerAgent {
 
   /** پرداخت فوری (پایان روز) — همان منطق پول، بدون انیمیشن */
   payNow() {
-    if (!this.basket.length) return 0;
+    // نکته: اگر روز وسطِ اسکن تمام شود، کالاهای روی نوار هم باید
+    // پرداخت شوند — وگرنه جنس از قفسه کم شده بود ولی پولش نمی‌آمد!
+    const items = this.basket.concat(this.scanQueue || []);
+    if (!items.length) return 0;
     let rev = 0;
-    for (const b of this.basket) {
+    for (const b of items) {
       if (b.mesh.parent) b.mesh.parent.remove(b.mesh);
       rev += b.price;
     }
-    const sold = this.basket.length;
+    const sold = items.length;
     this.basket.length = 0;
+    this.scanQueue = [];
     this.commitSale(sold, rev);
     return rev;
   }
@@ -570,7 +574,10 @@ class CustomerAgent {
         world.cashierScan = 1;
         if (world.cashierApi) {
           world.cashierApi.sync();
-          world.cashierReach = { k: 1, target: world.cashierApi.toUpperLocal(_v1.copy(belt)) };
+          // ⚠️ target باید وکتور «تازه» باشد — اگر بافر مشترک ماژول را
+          // بدهیم، اولین برداشتنِ کالا توسط مشتری‌ها همان بافر را بازنویسی
+          // می‌کند و دستِ متصدی وسط روز به سمت قفسه‌ها می‌رود!
+          world.cashierReach = { k: 1, target: world.cashierApi.toUpperLocal(belt) };
         }
         if (world.drawRegister) {
           const item = PRODUCTS.find((p) => p.id === entry.id);
@@ -831,7 +838,7 @@ class CustomerAgent {
         } else {
           this.completePayment();
           world.cashierScan = 0;
-          world.cashierReach = { k: 0, target: _v3.set(0, 0.2, 0.35) };
+          world.cashierReach = { k: 0, target: new THREE.Vector3(0, 0.2, 0.35) };
           this.sim.paying = null;
           this.sim.leaveQueue(this);
           this.setState('leaveShop');

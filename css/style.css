@@ -473,6 +473,40 @@ html.pseudo-fullscreen body {
 .buy-btn:active {
   transform: scale(0.94);
 }
+/* ستونِ خرید: دکمهٔ خرید + «پر کردن قفسه» زیرش */
+.buy-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: none;
+  align-items: stretch;
+}
+.fill-btn {
+  border: 1px solid rgba(47, 191, 113, 0.45);
+  background: rgba(47, 191, 113, 0.12);
+  color: #7fe0a8;
+  font-weight: 700;
+  font-size: 11px;
+  border-radius: 9px;
+  padding: 4px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.fill-btn:active {
+  transform: scale(0.94);
+}
+.fill-full {
+  color: #6fd394;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+.quality-line {
+  display: block;
+  margin-top: 6px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+}
 
 /* ---------- برچسب تقاضا ---------- */
 .demand {
